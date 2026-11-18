@@ -1,12 +1,10 @@
-import { Component, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { Component } from '@angular/core';
+import { ClassLinkShellComponent } from './features/classlink/classlink-shell.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
-  templateUrl: './app.html',
-  styleUrl: './app.css'
+  imports: [ClassLinkShellComponent],
+  template: `<app-classlink-shell />`,
+  styles: `:host { display: block; min-height: 100vh; }`,
 })
-export class App {
-  protected readonly title = signal('classlink_ftd');
-}
+export class App {}

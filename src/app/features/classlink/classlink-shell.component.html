@@ -1,0 +1,274 @@
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="brandMark">C</span><span>ClassLink</span></div>
+    <nav>
+      <button type="button" [class.active]="state.view() === 'dashboard'" (click)="state.view.set('dashboard')">
+        <app-icon name="grid" />Mes classes
+      </button>
+      <button type="button"><app-icon name="calendar" />Calendrier</button>
+      <p>CLASSES</p>
+      @for (c of state.classes().slice(0, 4); track c.id) {
+        <button type="button" (click)="state.openClass(c.role)">
+          <span [class]="'dot ' + c.color"></span>
+          <span class="truncate">{{ c.title }}</span>
+        </button>
+      }
+    </nav>
+    <div class="sidebarHelp">
+      <span>?</span>
+      <div>
+        <b>Besoin d’aide ?</b>
+        <small>Consulter le centre d’aide</small>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <div class="mobileBrand"><span class="brandMark">C</span><b>ClassLink</b></div>
+      <div class="crumb">
+        <span>ClassLink</span>
+        <app-icon name="arrow" [size]="15" />
+        <b>{{ crumbLabel() }}</b>
+      </div>
+      <div class="topActions">
+        <div class="demoSwitch">
+          <span>Mode démo</span>
+          <button type="button" [class.on]="state.role() === 'enseignant'" (click)="state.switchRole('enseignant')">
+            Enseignant
+          </button>
+          <button type="button" [class.on]="state.role() === 'étudiant'" (click)="state.switchRole('étudiant')">
+            Étudiant
+          </button>
+        </div>
+
+        <div class="menuAnchor">
+          <button
+            class="iconBtn notification"
+            type="button"
+            aria-label="Notifications"
+            (click)="state.noticeOpen.set(!state.noticeOpen()); state.profileOpen.set(false)"
+          >
+            <app-icon name="bell" />
+            @if (state.unreadCount()) {
+              <i>{{ state.unreadCount() }}</i>
+            }
+          </button>
+          @if (state.noticeOpen()) {
+            <app-notification-panel
+              [notices]="state.notices()"
+              (openNotice)="state.openNotice($event)"
+              (markAll)="markAllNotices()"
+              (goAll)="state.view.set('notifications'); state.noticeOpen.set(false)"
+            />
+          }
+        </div>
+
+        <button
+          class="profileButton"
+          type="button"
+          (click)="state.profileOpen.set(!state.profileOpen()); state.noticeOpen.set(false)"
+        >
+          <app-avatar name="Camille Dupont" />
+          <div class="userName">
+            <b>Camille Dupont</b>
+            <small>{{ state.role() === 'enseignant' ? 'Enseignante' : 'Étudiante' }}</small>
+          </div>
+        </button>
+        @if (state.profileOpen()) {
+          <div class="profileMenu">
+            <b>Camille Dupont</b>
+            <span>camille.dupont&#64;exemple.fr</span>
+            <button type="button" (click)="state.view.set('account'); state.profileOpen.set(false)">
+              <app-icon name="gear" [size]="16" />Paramètres du compte
+            </button>
+          </div>
+        }
+      </div>
+    </header>
+
+    @switch (state.view()) {
+      @case ('dashboard') {
+        <app-dashboard />
+      }
+      @case ('class') {
+        <app-classroom />
+      }
+      @case ('assignment') {
+        <app-assignment />
+      }
+      @case ('account') {
+        <app-account-settings />
+      }
+      @case ('notifications') {
+        <app-notifications-page />
+      }
+      @case ('classSettings') {
+        <app-class-settings />
+      }
+    }
+  </main>
+
+  @if (state.modal() === 'create') {
+    <div class="overlay" role="dialog" aria-modal="true">
+      <div class="modal">
+        <div class="modalHead">
+          <h2>Créer une classe</h2>
+          <button class="iconBtn" type="button" aria-label="Fermer" (click)="state.modal.set(null)">
+            <app-icon name="close" />
+          </button>
+        </div>
+        <form (submit)="submitCreate($event)">
+          <label>Nom de la classe<input required placeholder="Ex. Développement mobile" /></label>
+          <label>Matière<input required placeholder="Ex. Informatique" /></label>
+          <label>Description<textarea required placeholder="Présentez brièvement cette classe"></textarea></label>
+          <div class="modalActions">
+            <button class="btn ghost" type="button" (click)="state.modal.set(null)">Annuler</button>
+            <button class="btn" type="submit">Créer la classe</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  @if (state.modal() === 'join') {
+    <div class="overlay" role="dialog" aria-modal="true">
+      <div class="modal">
+        <div class="modalHead">
+          <h2>Rejoindre une classe</h2>
+          <button class="iconBtn" type="button" aria-label="Fermer" (click)="state.modal.set(null)">
+            <app-icon name="close" />
+          </button>
+        </div>
+        <div class="codeHint">
+          Code de démo valide :
+          <b>{{
+            state.settings().codeEnabled && !state.settings().archived ? state.settings().code : 'Aucun code actif'
+          }}</b>
+        </div>
+        <form
+          (submit)="$event.preventDefault(); state.joinWithCode()"
+        >
+          <label>
+            Code d’accès
+            <input
+              required
+              name="joinCode"
+              [ngModel]="state.joinCode()"
+              (ngModelChange)="state.joinCode.set(($event || '').toUpperCase())"
+              placeholder="Ex. CL-WEB24"
+            />
+          </label>
+          <p class="helper">
+            Demandez ce code à votre enseignant. Les inscriptions en double sont automatiquement bloquées.
+          </p>
+          <div class="modalActions">
+            <button class="btn ghost" type="button" (click)="state.modal.set(null)">Annuler</button>
+            <button class="btn" type="submit">Rejoindre</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  @if (state.modal() === 'work') {
+    <div class="overlay" role="dialog" aria-modal="true">
+      <div class="modal">
+        <div class="modalHead">
+          <h2>Nouveau contenu</h2>
+          <button class="iconBtn" type="button" aria-label="Fermer" (click)="state.modal.set(null)">
+            <app-icon name="close" />
+          </button>
+        </div>
+        <form (submit)="submitWork($event)">
+          <label>Titre<input required placeholder="Titre du cours ou du devoir" /></label>
+          <label>
+            Type
+            <select>
+              <option>Devoir</option>
+              <option>Cours</option>
+            </select>
+          </label>
+          <label>Instructions<textarea required placeholder="Consignes pour les étudiants"></textarea></label>
+          <div class="formRow">
+            <label>Date limite<input type="date" /></label>
+            <label>Note maximale<input type="number" placeholder="20" /></label>
+          </div>
+          <div class="modalActions">
+            <button class="btn ghost" type="button" (click)="state.modal.set(null)">Annuler</button>
+            <button class="btn" type="submit">Publier</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  @if (state.modal() === 'confirm') {
+    <div class="overlay" role="dialog" aria-modal="true">
+      <div class="modal">
+        <div class="modalHead">
+          <h2>Remettre le devoir ?</h2>
+          <button class="iconBtn" type="button" aria-label="Fermer" (click)="state.modal.set(null)">
+            <app-icon name="close" />
+          </button>
+        </div>
+        <p>Votre réponse sera envoyée à l’enseignante. Vous pourrez encore la consulter après l’envoi.</p>
+        <div class="modalActions">
+          <button class="btn ghost" type="button" (click)="state.modal.set(null)">Annuler</button>
+          <button class="btn" type="button" (click)="confirmSubmit()">Confirmer l’envoi</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (state.modal() === 'archive') {
+    <div class="overlay" role="dialog" aria-modal="true">
+      <div class="modal">
+        <div class="modalHead">
+          <h2>{{ state.settings().archived ? 'Restaurer la classe ?' : 'Archiver la classe ?' }}</h2>
+          <button class="iconBtn" type="button" aria-label="Fermer" (click)="state.modal.set(null)">
+            <app-icon name="close" />
+          </button>
+        </div>
+        <p>
+          {{
+            state.settings().archived
+              ? 'La classe redeviendra accessible en écriture pour ses membres.'
+              : 'La classe deviendra en lecture seule. Son contenu restera visible.'
+          }}
+        </p>
+        <div class="modalActions">
+          <button class="btn ghost" type="button" (click)="state.modal.set(null)">Annuler</button>
+          <button class="btn" type="button" (click)="state.toggleArchive()">
+            {{ state.settings().archived ? 'Restaurer' : 'Archiver' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (state.modal() === 'code') {
+    <div class="overlay" role="dialog" aria-modal="true">
+      <div class="modal">
+        <div class="modalHead">
+          <h2>Régénérer le code ?</h2>
+          <button class="iconBtn" type="button" aria-label="Fermer" (click)="state.modal.set(null)">
+            <app-icon name="close" />
+          </button>
+        </div>
+        <p>L’ancien code ne permettra plus de rejoindre cette classe.</p>
+        <div class="modalActions">
+          <button class="btn ghost" type="button" (click)="state.modal.set(null)">Annuler</button>
+          <button class="btn" type="button" (click)="state.regenerateCode()">Régénérer</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (state.toast()) {
+    <div class="toast">
+      <span><app-icon name="check" [size]="16" /></span>
+      {{ state.toast() }}
+    </div>
+  }
+</div>

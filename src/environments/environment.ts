@@ -1,13 +1,12 @@
 export const environment = {
-  production: true,
-  /** Set to true after filling firebase credentials below */
-  useFirebase: false,
+  apiUrl: 'http://localhost:8081/api',
   firebase: {
-    apiKey: 'YOUR_API_KEY',
-    authDomain: 'YOUR_PROJECT.firebaseapp.com',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT.appspot.com',
-    messagingSenderId: 'YOUR_SENDER_ID',
-    appId: 'YOUR_APP_ID',
+    apiKey: 'AIzaSyAlVi41KCuNhrVTqQUIPRM9_QSn6f9EdzY',
+    authDomain: 'claink-b3eb5.firebaseapp.com',
+    databaseURL: 'https://claink-b3eb5-default-rtdb.firebaseio.com',
+    projectId: 'claink-b3eb5',
+    storageBucket: 'claink-b3eb5.firebasestorage.app',
+    messagingSenderId: '129816978388',
+    appId: '1:129816978388:web:4e0c6936bf63fe9fb5ac41',
   },
 };

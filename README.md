@@ -1,37 +1,21 @@
-# ClassLink (Angular + Firebase)
+# ClassLink — front-end (Angular 20)
 
-Classroom-style learning platform prototype converted from the Figma Make / React design into Angular 20.
+| Part | Path | Tech |
+|------|------|------|
+| Front-end | `d:\classlink_ftd` | Angular 20, Tailwind, Firebase Auth |
+| Back-end  | `d:\classLink`     | Spring Boot 3.4, Spring Security (Firebase ID-token JWT), Firestore (Admin SDK) |
 
-## Run (demo mode)
+Angular --(Firebase Auth ID token)--> Spring Boot REST API --(Admin SDK)--> Firestore
 
-```bash
-npm start
-```
+## Prerequisites (Firebase console, project claink-b3eb5)
+1. Authentication > Sign-in method > enable **Email/Password**.
+2. Firestore Database > create the database.
+3. Project settings > Service accounts > **Generate new private key**; save it as
+   `d:\classLink\firebase-service-account.json` (git-ignored) or set `FIREBASE_SERVICE_ACCOUNT_PATH`.
 
-Open `http://localhost:4200`. Demo mode uses localStorage — no Firebase keys required.
+## Run
+- Back-end: `mvn spring-boot:run` (port 8080, JDK 17+). `mvn test` runs the API tests (in-memory store).
+- Front-end: `npm install && npm start` -> http://localhost:4200
 
-Use the **Mode démo** switch (Enseignant / Étudiant) in the top bar to test both roles.
-
-## Enable Firebase
-
-1. Create a Firebase project with Auth (Email/Password), Firestore, and Storage.
-2. Paste your web config into:
-   - `src/environments/environment.development.ts`
-   - `src/environments/environment.ts`
-3. Set `useFirebase: true`.
-4. See the smoke-test example: `src/app/examples/firebase-usage.example.ts`
-
-## Suggested Firestore paths
-
-- `users/{uid}`
-- `classes/{classId}`
-- `classes/{classId}/assignments/{assignmentId}`
-- `classes/{classId}/assignments/{assignmentId}/submissions/{studentId}`
-- `classMembers/{classId}/users/{uid}`
-- `notifications/{uid}/items/{noticeId}`
-
-## Stack
-
-- Angular 20 (standalone, zoneless)
-- Firebase JS SDK (Auth / Firestore / Storage)
-- Demo fallback when `useFirebase` is `false`
+## Routes
+`/login`, `/home`, `/classes`, `/classes/:id`, `/calendar`, `/notifications`, `/settings`

@@ -1,10 +1,9 @@
 import { Component } from '@angular/core';
-import { ClassLinkShellComponent } from './features/classlink/classlink-shell.component';
+import { RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'app-root',
-  imports: [ClassLinkShellComponent],
-  template: `<app-classlink-shell />`,
-  styles: `:host { display: block; min-height: 100vh; }`,
+  imports: [RouterOutlet],
+  template: `<router-outlet />`,
 })
 export class App {}

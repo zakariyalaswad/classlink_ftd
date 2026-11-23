@@ -11,7 +11,7 @@ import { IconComponent } from '../shared/icon.component';
 
 export type { StoredFileAttachment } from '../core/file-storage.service';
 
-const FILE_MARKER_REGEX = /\n?\[\[FILE:([^|\]]+)\|([^|\]]+)\|([^\]]+)\]\]/g;
+const FILE_MARKER_REGEX = /\n?\[\[FILE:([^|\]]+)\|([^|\]]+)\|([^|\]]+)(?:\|([^\]]+))?\]\]/g;
 
 interface PreviewModalData {
   name: string;
@@ -241,13 +241,19 @@ interface PreviewModalData {
 
               <div class="flex flex-wrap items-center gap-2">
                 <label class="btn-light !py-1.5 !px-3 !text-xs cursor-pointer gap-1.5">
-                  <app-icon name="file" [size]="14" /> Joindre un fichier (PDF, ZIP, image...)
-                  <input type="file" class="hidden" (change)="onSubmissionFileSelected($event)" />
+                  <app-icon name="file" [size]="14" />
+                  {{ uploadingFile() ? 'Envoi sur Cloudinary...' : 'Joindre un fichier (PDF, ZIP, image...)' }}
+                  <input
+                    type="file"
+                    class="hidden"
+                    [disabled]="uploadingFile()"
+                    (change)="onSubmissionFileSelected($event)"
+                  />
                 </label>
                 <button
                   type="submit"
                   class="btn !py-1.5 !px-3 !text-xs"
-                  [disabled]="!texte.trim() && !submissionAttachment()"
+                  [disabled]="uploadingFile() || (!texte.trim() && !submissionAttachment())"
                 >
                   {{ mine() ? 'Mettre à jour la remise' : 'Remettre le devoir' }}
                 </button>
@@ -397,6 +403,7 @@ export class PublicationCardComponent implements OnInit {
   newComment = '';
   texte = '';
   submissionAttachment = signal<StoredFileAttachment | null>(null);
+  uploadingFile = signal(false);
   previewModal = signal<PreviewModalData | null>(null);
   grades: Record<string, number | null> = {};
   corrections: Record<string, string> = {};
@@ -430,22 +437,40 @@ export class PublicationCardComponent implements OnInit {
         typeLabel: m[2],
         sizeLabel: m[3],
         dataUrl: '',
+        remoteUrl: m[4] || undefined,
       });
     }
     return out;
   }
 
   async openFileViewer(att: StoredFileAttachment, prefix: string): Promise<void> {
-    const dataUrl =
+    const stored =
       att.dataUrl ||
-      (await this.fileStorage.getFile([
-        `${prefix}_${att.name}`,
-        att.name,
-      ]));
-    const converted = dataUrl ? this.fileStorage.dataUrlToBlobUrl(dataUrl) : null;
-    const mimeType = converted?.mimeType || '';
-    let textContent: string | null = null;
+      (await this.fileStorage.getFile([`${prefix}_${att.name}`, att.name]));
+    const remoteUrl = att.remoteUrl || (stored.startsWith('http') ? stored : '');
+    const dataUrl = stored.startsWith('data:') ? stored : '';
+
+    let converted = dataUrl ? this.fileStorage.dataUrlToBlobUrl(dataUrl) : null;
+    let fetchedRemoteText: string | null = null;
+
+    if (!converted && remoteUrl) {
+      const remoteBlob = await this.fileStorage.remoteUrlToBlobUrl(remoteUrl, att.name);
+      if (remoteBlob) {
+        converted = remoteBlob;
+        fetchedRemoteText = remoteBlob.textContent;
+      }
+    }
+
+    const ext = (att.name.split('.').pop() || '').toLowerCase();
+    const isImageExt = /^(png|jpg|jpeg|gif|webp|svg|bmp)$/i.test(ext);
+    const isPdfExt = ext === 'pdf';
+    const mimeType =
+      converted?.mimeType ||
+      (isImageExt ? `image/${ext === 'jpg' ? 'jpeg' : ext}` : isPdfExt ? 'application/pdf' : '');
+
+    let textContent: string | null = fetchedRemoteText;
     if (
+      textContent === null &&
       dataUrl &&
       (mimeType.startsWith('text/') ||
         mimeType === 'application/json' ||
@@ -460,13 +485,18 @@ export class PublicationCardComponent implements OnInit {
         textContent = null;
       }
     }
+
+    const activeUrl = converted?.blobUrl || remoteUrl || dataUrl;
+    const safeUrl =
+      converted?.safeUrl || (remoteUrl ? this.fileStorage.trustUrl(remoteUrl) : null);
+
     this.previewModal.set({
       name: att.name,
       typeLabel: att.typeLabel,
       sizeLabel: att.sizeLabel,
-      dataUrl,
-      blobUrl: converted?.blobUrl || '',
-      safeUrl: converted?.safeUrl || null,
+      dataUrl: activeUrl,
+      blobUrl: activeUrl,
+      safeUrl,
       mimeType,
       textContent,
     });
@@ -480,7 +510,8 @@ export class PublicationCardComponent implements OnInit {
     this.previewModal.set(null);
   }
 
-  onSubmissionFileSelected(event: Event): void {
+  async onSubmissionFileSelected(event: Event): Promise<void> {
+    this.error.set('');
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
@@ -489,18 +520,34 @@ export class PublicationCardComponent implements OnInit {
         ? `${(file.size / (1024 * 1024)).toFixed(1).replace('.', ',')} Mo`
         : `${Math.max(1, Math.round(file.size / 1024))} Ko`;
     const ext = (file.name.split('.').pop() || 'FICHIER').toUpperCase();
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+
+    // Read locally for immediate in-app preview & upload to Cloudinary in parallel
+    const dataUrlPromise = new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+
+    this.uploadingFile.set(true);
+    try {
+      const [dataUrl, remoteUrl] = await Promise.all([
+        dataUrlPromise,
+        this.fileStorage.uploadToCloudinary(file, 'classlink/submissions'),
+      ]);
       this.submissionAttachment.set({
         name: file.name,
         sizeLabel,
         typeLabel: ext,
         dataUrl,
+        remoteUrl,
       });
-    };
-    reader.readAsDataURL(file);
-    input.value = '';
+    } catch (e) {
+      this.error.set((e as Error).message);
+    } finally {
+      this.uploadingFile.set(false);
+      input.value = '';
+    }
   }
 
   async toggleDetails(): Promise<void> {
@@ -541,9 +588,12 @@ export class PublicationCardComponent implements OnInit {
       const att = this.submissionAttachment();
       let payload = this.texte.trim();
       if (att) {
-        await this.fileStorage.saveFile(`sub_${this.pub().id}_${att.name}`, att.dataUrl);
-        await this.fileStorage.saveFile(att.name, att.dataUrl);
-        const marker = `[[FILE:${att.name}|${att.typeLabel}|${att.sizeLabel}]]`;
+        if (att.dataUrl) {
+          await this.fileStorage.saveFile(`sub_${this.pub().id}_${att.name}`, att.dataUrl);
+          await this.fileStorage.saveFile(att.name, att.dataUrl);
+        }
+        const urlPart = att.remoteUrl ? `|${att.remoteUrl}` : '';
+        const marker = `[[FILE:${att.name}|${att.typeLabel}|${att.sizeLabel}${urlPart}]]`;
         payload = payload ? `${payload}\n${marker}` : marker;
       }
       if (!payload) return;

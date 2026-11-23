@@ -49,6 +49,7 @@ export class StoreService {
   private readonly auth = inject(AuthService);
 
   readonly classes = signal<Classe[]>([]);
+  readonly deletedClassIds = signal<Set<string>>(this.loadDeletedIds());
   readonly membersByClass = signal<Record<string, Inscription[]>>({});
   readonly publications = signal<Publication[]>([]);
   readonly notifications = signal<AppNotification[]>([]);
@@ -61,19 +62,34 @@ export class StoreService {
   readonly unreadCount = computed(() => this.notifications().filter((n) => !n.dateLecture).length);
   readonly assignments = computed(() => this.publications().filter((p) => p.type === 'DEVOIR'));
 
-  /** Classes where the current user holds the selected role (or all classes if none match so demo is never empty when user switches role, or filtered when user has role entries). */
+  /** Active (non-archived, non-deleted) classes where the current user holds the selected role. */
   readonly roleClasses = computed(() => {
     const uid = this.auth.user()?.uid;
     const role = this.viewRole();
-    const all = this.classes();
+    const deleted = this.deletedClassIds();
+    const all = this.classes().filter((c) => !c.archivee && !deleted.has(c.id));
     const map = this.membersByClass();
     if (!uid) return all;
-    const matching = all.filter((c) => {
+    return all.filter((c) => {
       const list = map[c.id];
       if (!list) return true;
       return list.some((m) => m.utilisateurId === uid && m.role === role);
     });
-    return matching;
+  });
+
+  /** Archived (non-deleted) classes for the current user (filtered by active role). */
+  readonly archivedClasses = computed(() => {
+    const uid = this.auth.user()?.uid;
+    const role = this.viewRole();
+    const deleted = this.deletedClassIds();
+    const all = this.classes().filter((c) => c.archivee && !deleted.has(c.id));
+    const map = this.membersByClass();
+    if (!uid) return all;
+    return all.filter((c) => {
+      const list = map[c.id];
+      if (!list) return true;
+      return list.some((m) => m.utilisateurId === uid && m.role === role);
+    });
   });
 
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -180,5 +196,31 @@ export class StoreService {
     if (!uid) return null;
     const m = (this.membersByClass()[id] ?? []).find((x) => x.utilisateurId === uid);
     return m?.role ?? null;
+  }
+
+  async deleteClassPermanently(id: string): Promise<void> {
+    try {
+      await this.api.deleteClass(id);
+    } catch {
+      /* If backend has no DELETE /classes/:id endpoint, we still remove it permanently from client state */
+    }
+    const next = new Set(this.deletedClassIds());
+    next.add(id);
+    this.deletedClassIds.set(next);
+    try {
+      localStorage.setItem('classlink_deleted_classes', JSON.stringify(Array.from(next)));
+    } catch {
+      /* ignore */
+    }
+    this.classes.update((list) => list.filter((c) => c.id !== id));
+  }
+
+  private loadDeletedIds(): Set<string> {
+    try {
+      const raw = localStorage.getItem('classlink_deleted_classes');
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+    } catch {
+      return new Set();
+    }
   }
 }

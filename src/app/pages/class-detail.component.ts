@@ -191,12 +191,24 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
                     }
                     <div class="flex items-center justify-between gap-2">
                       <label class="btn-light !text-xs cursor-pointer gap-1.5">
-                        <app-icon name="file" [size]="14" /> Joindre un fichier
-                        <input type="file" class="hidden" (change)="onPublicationFileSelected($event)" />
+                        <app-icon name="file" [size]="14" />
+                        {{ uploadingPublicationFile() ? 'Envoi sur Cloudinary...' : 'Joindre un fichier' }}
+                        <input
+                          type="file"
+                          class="hidden"
+                          [disabled]="uploadingPublicationFile()"
+                          (change)="onPublicationFileSelected($event)"
+                        />
                       </label>
                       <div class="flex gap-2">
                         <button type="button" (click)="composerExpanded.set(false)" class="btn-light !text-xs">Annuler</button>
-                        <button type="submit" class="btn !text-xs" [disabled]="!titre.trim()">Publier</button>
+                        <button
+                          type="submit"
+                          class="btn !text-xs"
+                          [disabled]="uploadingPublicationFile() || !titre.trim()"
+                        >
+                          Publier
+                        </button>
                       </div>
                     </div>
                   </form>
@@ -576,14 +588,26 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
                   </div>
                 } @else {
                   <label class="btn-light !text-xs cursor-pointer gap-1.5 w-full">
-                    <app-icon name="file" [size]="14" /> Choisir un fichier à joindre
-                    <input type="file" class="hidden" (change)="onPublicationFileSelected($event)" />
+                    <app-icon name="file" [size]="14" />
+                    {{ uploadingPublicationFile() ? 'Envoi sur Cloudinary...' : 'Choisir un fichier à joindre' }}
+                    <input
+                      type="file"
+                      class="hidden"
+                      [disabled]="uploadingPublicationFile()"
+                      (change)="onPublicationFileSelected($event)"
+                    />
                   </label>
                 }
               </div>
               <div class="flex justify-end gap-2 pt-2">
                 <button type="button" (click)="createWorkModalOpen.set(false)" class="btn-light !text-xs">Annuler</button>
-                <button type="submit" class="btn !text-xs" [disabled]="!titre.trim()">Publier</button>
+                <button
+                  type="submit"
+                  class="btn !text-xs"
+                  [disabled]="uploadingPublicationFile() || !titre.trim()"
+                >
+                  Publier
+                </button>
               </div>
             </form>
           </div>
@@ -673,6 +697,7 @@ export class ClassDetailComponent {
 
   composerExpanded = signal(false);
   composerAttachment = signal<StoredFileAttachment | null>(null);
+  uploadingPublicationFile = signal(false);
   createWorkModalOpen = signal(false);
   settingsModalOpen = signal(false);
   classNotifEnabled = signal(true);
@@ -808,7 +833,8 @@ export class ClassDetailComponent {
     return (this.allSubmissionsByDevoir()[devoirId] ?? []).find((r) => r.etudiantId === studentUid);
   }
 
-  onPublicationFileSelected(event: Event): void {
+  async onPublicationFileSelected(event: Event): Promise<void> {
+    this.error.set('');
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
@@ -817,18 +843,33 @@ export class ClassDetailComponent {
         ? `${(file.size / (1024 * 1024)).toFixed(1).replace('.', ',')} Mo`
         : `${Math.max(1, Math.round(file.size / 1024))} Ko`;
     const ext = (file.name.split('.').pop() || 'FICHIER').toUpperCase();
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+
+    const dataUrlPromise = new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+
+    this.uploadingPublicationFile.set(true);
+    try {
+      const [dataUrl, remoteUrl] = await Promise.all([
+        dataUrlPromise,
+        this.fileStorage.uploadToCloudinary(file, 'classlink/publications'),
+      ]);
       this.composerAttachment.set({
         name: file.name,
         sizeLabel,
         typeLabel: ext,
         dataUrl,
+        remoteUrl,
       });
-    };
-    reader.readAsDataURL(file);
-    input.value = '';
+    } catch (e) {
+      this.error.set((e as Error).message);
+    } finally {
+      this.uploadingPublicationFile.set(false);
+      input.value = '';
+    }
   }
 
   async publish(): Promise<void> {
@@ -836,8 +877,11 @@ export class ClassDetailComponent {
       const att = this.composerAttachment();
       let body = this.contenu.trim();
       if (att) {
-        await this.fileStorage.saveFile(att.name, att.dataUrl);
-        const marker = `[[FILE:${att.name}|${att.typeLabel}|${att.sizeLabel}]]`;
+        if (att.dataUrl) {
+          await this.fileStorage.saveFile(att.name, att.dataUrl);
+        }
+        const urlPart = att.remoteUrl ? `|${att.remoteUrl}` : '';
+        const marker = `[[FILE:${att.name}|${att.typeLabel}|${att.sizeLabel}${urlPart}]]`;
         body = body ? `${body}\n${marker}` : marker;
       }
       const created = await this.api.createPublication(this.id(), {

@@ -78,6 +78,16 @@ import { Component, Input } from '@angular/core';
         @case ('back') {
           <path d="m15 18-6-6 6-6" />
         }
+        @case ('archive') {
+          <rect x="2" y="4" width="20" height="5" rx="1" />
+          <path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9" />
+          <path d="M10 13h4" />
+        }
+        @case ('trash') {
+          <path d="M3 6h18" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        }
         @case ('gear') {
           <circle cx="12" cy="12" r="3" />
           <path

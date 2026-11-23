@@ -35,6 +35,7 @@ export class ApiService {
   }
   private post<T>(path: string, body: unknown = {}) { return this.call(firstValueFrom(this.http.post<T>(this.base + path, body))); }
   private put<T>(path: string, body: unknown = {}) { return this.call(firstValueFrom(this.http.put<T>(this.base + path, body))); }
+  private del<T>(path: string) { return this.call(firstValueFrom(this.http.delete<T>(this.base + path))); }
 
   // --- profile
   register(nom: string, prenom: string) { return this.post<Utilisateur>('/auth/register', { nom, prenom }); }
@@ -56,6 +57,7 @@ export class ApiService {
   updateSettings(id: string, s: Partial<ParametresClasse>) { return this.put<Classe>(`/classes/${id}/settings`, s); }
   regenerateCode(id: string) { return this.post<{ codeAcces: string }>(`/classes/${id}/regenerate-code`); }
   archive(id: string, archivee: boolean) { return this.put<Classe>(`/classes/${id}/archive?archivee=${archivee}`); }
+  deleteClass(id: string) { return this.del<unknown>(`/classes/${id}`); }
   canAnnounce(classId: string) { return this.get<{ allowed: boolean }>(`/classes/${classId}/check-announcement-permission`); }
 
   // --- publications

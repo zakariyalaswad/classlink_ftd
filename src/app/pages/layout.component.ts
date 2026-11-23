@@ -70,18 +70,26 @@ import { IconComponent } from '../shared/icon.component';
           </div>
         </div>
 
-        <!-- Bottom Help Card -->
+        <!-- Bottom Archived Courses Card (replaces Besoin d'aide ?) -->
         <div class="p-3">
           <a
-            routerLink="/settings"
+            routerLink="/archived"
+            routerLinkActive="!bg-[#eef3ff] border border-blue-200"
             class="flex items-center gap-3 rounded-2xl bg-[#f5f7fb] hover:bg-[#eef2f9] p-3 transition-colors"
           >
-            <span class="w-7 h-7 rounded-full bg-[#e2e9fb] text-[#2454d6] font-bold text-xs flex items-center justify-center shrink-0">
-              ?
+            <span class="w-8 h-8 rounded-xl bg-[#e2e9fb] text-[#2454d6] font-bold text-xs flex items-center justify-center shrink-0">
+              <app-icon name="archive" [size]="16" />
             </span>
-            <div class="min-w-0">
-              <p class="text-xs font-bold text-[#182033] leading-tight">Besoin d'aide ?</p>
-              <p class="text-[11px] text-slate-500 truncate mt-0.5">Consulter le centre d'aide</p>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center justify-between gap-1">
+                <p class="text-xs font-bold text-[#182033] leading-tight">Cours archivés</p>
+                @if (store.archivedClasses().length > 0) {
+                  <span class="text-[10px] font-extrabold bg-[#2454d6] text-white rounded-full px-1.5 py-0.5 leading-none">
+                    {{ store.archivedClasses().length }}
+                  </span>
+                }
+              </div>
+              <p class="text-[11px] text-slate-500 truncate mt-0.5">Gérer ou restaurer vos cours</p>
             </div>
           </a>
         </div>
@@ -302,6 +310,7 @@ export class LayoutComponent {
       return this.store.className(id) || 'Détail de la classe';
     }
     if (url.startsWith('/calendar')) return 'Calendrier';
+    if (url.startsWith('/archived')) return 'Cours archivés';
     if (url.startsWith('/notifications')) return 'Notifications';
     if (url.startsWith('/settings')) return 'Paramètres du compte';
     return 'Mes classes';

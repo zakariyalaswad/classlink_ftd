@@ -2,6 +2,7 @@ import { Component, effect, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
+import { FileStorageService } from '../core/file-storage.service';
 import { PreferenceNotification } from '../core/models';
 import { IconComponent } from '../shared/icon.component';
 
@@ -76,11 +77,12 @@ const DEFAULT_NOTIFICATION_ROWS: { type: string; label: string; defaultEmail: bo
               </div>
             }
             <label class="mt-3 text-xs font-bold text-[#2454d6] hover:underline cursor-pointer">
-              Choisir une photo
+              {{ uploadingPhoto() ? 'Envoi sur Cloudinary...' : 'Choisir une photo' }}
               <input
                 type="file"
                 accept="image/*"
                 class="hidden"
+                [disabled]="uploadingPhoto()"
                 (change)="onPhotoSelected($event)"
               />
             </label>
@@ -262,10 +264,12 @@ const DEFAULT_NOTIFICATION_ROWS: { type: string; label: string; defaultEmail: bo
 export class SettingsComponent implements OnInit {
   readonly auth = inject(AuthService);
   private readonly api = inject(ApiService);
+  private readonly fileStorage = inject(FileStorageService);
 
   prenom = '';
   nom = '';
   photoDataUrl = signal<string | null>(null);
+  uploadingPhoto = signal(false);
   currentPassword = '';
   newPassword = '';
   confirmPassword = '';
@@ -334,8 +338,9 @@ export class SettingsComponent implements OnInit {
     return f + l;
   }
 
-  onPhotoSelected(event: Event): void {
+  async onPhotoSelected(event: Event): Promise<void> {
     this.err.set('');
+    this.msg.set('');
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
@@ -343,22 +348,21 @@ export class SettingsComponent implements OnInit {
       this.err.set('Veuillez choisir un fichier image (PNG, JPG, WEBP...).');
       return;
     }
-    if (file.size > 4 * 1024 * 1024) {
-      this.err.set('La photo ne doit pas dépasser 4 Mo.');
+    if (file.size > 10 * 1024 * 1024) {
+      this.err.set('La photo ne doit pas dépasser 10 Mo.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : null;
-      if (result) {
-        this.resizeImage(result, 256, 256).then((resized) => {
-          this.photoDataUrl.set(resized);
-          this.msg.set('Photo chargée. Cliquez sur « Enregistrer » pour valider.');
-        });
-      }
-    };
-    reader.readAsDataURL(file);
-    input.value = '';
+    this.uploadingPhoto.set(true);
+    try {
+      const cloudUrl = await this.fileStorage.uploadToCloudinary(file, 'classlink/avatars');
+      this.photoDataUrl.set(cloudUrl);
+      this.msg.set('Photo envoyée sur Cloudinary ! Cliquez sur « Enregistrer » pour valider.');
+    } catch (e) {
+      this.err.set((e as Error).message);
+    } finally {
+      this.uploadingPhoto.set(false);
+      input.value = '';
+    }
   }
 
   removePhoto(): void {

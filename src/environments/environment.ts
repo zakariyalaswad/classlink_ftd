@@ -9,4 +9,9 @@ export const environment = {
     messagingSenderId: '129816978388',
     appId: '1:129816978388:web:4e0c6936bf63fe9fb5ac41',
   },
+  cloudinary: {
+    cloudName: 'kikly524',
+    apiKey: '665972839163596',
+    apiSecret: '5GkU_AmgDt-XUxeOEe_uM4cRB78',
+  },
 };

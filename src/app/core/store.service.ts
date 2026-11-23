@@ -49,7 +49,6 @@ export class StoreService {
   private readonly auth = inject(AuthService);
 
   readonly classes = signal<Classe[]>([]);
-  readonly deletedClassIds = signal<Set<string>>(this.loadDeletedIds());
   readonly membersByClass = signal<Record<string, Inscription[]>>({});
   readonly publications = signal<Publication[]>([]);
   readonly notifications = signal<AppNotification[]>([]);
@@ -62,12 +61,11 @@ export class StoreService {
   readonly unreadCount = computed(() => this.notifications().filter((n) => !n.dateLecture).length);
   readonly assignments = computed(() => this.publications().filter((p) => p.type === 'DEVOIR'));
 
-  /** Active (non-archived, non-deleted) classes where the current user holds the selected role. */
+  /** Active (non-archived) classes where the current user holds the selected role. */
   readonly roleClasses = computed(() => {
     const uid = this.auth.user()?.uid;
     const role = this.viewRole();
-    const deleted = this.deletedClassIds();
-    const all = this.classes().filter((c) => !c.archivee && !deleted.has(c.id));
+    const all = this.classes().filter((c) => !c.archivee);
     const map = this.membersByClass();
     if (!uid) return all;
     return all.filter((c) => {
@@ -77,12 +75,11 @@ export class StoreService {
     });
   });
 
-  /** Archived (non-deleted) classes for the current user (filtered by active role). */
+  /** Archived classes for the current user (filtered by active role). */
   readonly archivedClasses = computed(() => {
     const uid = this.auth.user()?.uid;
     const role = this.viewRole();
-    const deleted = this.deletedClassIds();
-    const all = this.classes().filter((c) => c.archivee && !deleted.has(c.id));
+    const all = this.classes().filter((c) => c.archivee);
     const map = this.membersByClass();
     if (!uid) return all;
     return all.filter((c) => {
@@ -137,11 +134,14 @@ export class StoreService {
       }
       this.membersByClass.set(memberMap);
 
-      // Auto-select role based on user's actual memberships if current viewRole has 0 classes and the other has some
       const uid = this.auth.user()?.uid;
       if (uid && classes.length > 0) {
-        const hasTeacher = classes.some((c) => (memberMap[c.id] ?? []).some((m) => m.utilisateurId === uid && m.role === 'ENSEIGNANT'));
-        const hasStudent = classes.some((c) => (memberMap[c.id] ?? []).some((m) => m.utilisateurId === uid && m.role === 'ETUDIANT'));
+        const hasTeacher = classes.some((c) =>
+          (memberMap[c.id] ?? []).some((m) => m.utilisateurId === uid && m.role === 'ENSEIGNANT'),
+        );
+        const hasStudent = classes.some((c) =>
+          (memberMap[c.id] ?? []).some((m) => m.utilisateurId === uid && m.role === 'ETUDIANT'),
+        );
         if (!hasTeacher && hasStudent) {
           this.viewRole.set('ETUDIANT');
         } else if (hasTeacher && !hasStudent) {
@@ -160,9 +160,7 @@ export class StoreService {
   async refreshNotifications(): Promise<void> {
     try {
       const list = await this.api.getNotifications();
-      this.notifications.set(
-        [...list].sort((a, b) => b.dateCreation.localeCompare(a.dateCreation)),
-      );
+      this.notifications.set([...list].sort((a, b) => b.dateCreation.localeCompare(a.dateCreation)));
     } catch {
       /* keep previous list */
     }
@@ -191,36 +189,13 @@ export class StoreService {
     return (this.membersByClass()[id] ?? []).length;
   }
 
-  userRoleInClass(id: string): RoleClasse | null {
-    const uid = this.auth.user()?.uid;
-    if (!uid) return null;
-    const m = (this.membersByClass()[id] ?? []).find((x) => x.utilisateurId === uid);
-    return m?.role ?? null;
-  }
-
   async deleteClassPermanently(id: string): Promise<void> {
-    try {
-      await this.api.deleteClass(id);
-    } catch {
-      /* If backend has no DELETE /classes/:id endpoint, we still remove it permanently from client state */
-    }
-    const next = new Set(this.deletedClassIds());
-    next.add(id);
-    this.deletedClassIds.set(next);
-    try {
-      localStorage.setItem('classlink_deleted_classes', JSON.stringify(Array.from(next)));
-    } catch {
-      /* ignore */
-    }
-    this.classes.update((list) => list.filter((c) => c.id !== id));
+    await this.api.deleteClass(id);
+    await this.refresh();
   }
 
-  private loadDeletedIds(): Set<string> {
-    try {
-      const raw = localStorage.getItem('classlink_deleted_classes');
-      return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
-    } catch {
-      return new Set();
-    }
+  async leaveClass(id: string): Promise<void> {
+    await this.api.leaveClass(id);
+    await this.refresh();
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { environment } from '../../environments/environment';
 
@@ -14,45 +14,109 @@ const DB_NAME = 'classlink_files_db';
 const STORE_NAME = 'files';
 
 /**
- * Handles file & photo uploads to Cloudinary (with signed SHA-1 requests using environment.cloudinary)
- * plus local IndexedDB caching so files can be previewed in-app across all devices and sessions.
+ * Storage strategy:
+ * - Photos (image/*): saved in IndexedDB and stored in Firebase as Base64 DataURL (data:image/...;base64,...).
+ * - Other files (PDF, ZIP, docs, etc.): uploaded to Cloudinary (signed SHA-1 upload) and cached in IndexedDB.
  */
 @Injectable({ providedIn: 'root' })
 export class FileStorageService {
+  private readonly sanitizer = inject(DomSanitizer);
   private dbPromise: Promise<IDBDatabase> | null = null;
-  private memoryCache = new Map<string, string>();
+  private readonly memoryCache = new Map<string, string>();
 
-  constructor(private readonly sanitizer: DomSanitizer) {}
+  isImageFile(file: File): boolean {
+    return file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(file.name);
+  }
 
   /**
-   * Uploads a File or Base64 DataURL directly to Cloudinary using signed upload (cloudName: kikly524)
+   * Reads an image File as a Base64 DataURL (data:image/...;base64,...), resizing large images
+   * so they fit cleanly in Firebase Realtime Database and IndexedDB.
+   */
+  async readImageAsBase64(file: File, maxDimension = 1024): Promise<string> {
+    const rawDataUrl = await this.readFileAsDataUrl(file);
+    if (!rawDataUrl.startsWith('data:image/') || file.type === 'image/svg+xml' || file.type === 'image/gif') {
+      return rawDataUrl;
+    }
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const ratio = Math.min(maxDimension / img.width, maxDimension / img.height, 1);
+        if (ratio === 1 && rawDataUrl.length < 700_000) {
+          resolve(rawDataUrl);
+          return;
+        }
+        const width = Math.max(1, Math.round(img.width * ratio));
+        const height = Math.max(1, Math.round(img.height * ratio));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(rawDataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        const outputType = file.type === 'image/png' && rawDataUrl.length < 500_000 ? 'image/png' : 'image/jpeg';
+        resolve(canvas.toDataURL(outputType, 0.85));
+      };
+      img.onerror = () => resolve(rawDataUrl);
+      img.src = rawDataUrl;
+    });
+  }
+
+  /**
+   * Prepares any uploaded file according to its type:
+   * - Photo -> Base64 DataURL saved in IndexedDB and returned for Firebase storage.
+   * - Other file -> Uploaded to Cloudinary and cached in IndexedDB.
+   */
+  async prepareAttachment(file: File, cloudinaryFolder = 'classlink'): Promise<StoredFileAttachment> {
+    const sizeLabel =
+      file.size >= 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(1).replace('.', ',')} Mo`
+        : `${Math.max(1, Math.round(file.size / 1024))} Ko`;
+    const typeLabel = (file.name.split('.').pop() || 'FICHIER').toUpperCase();
+
+    if (this.isImageFile(file)) {
+      const dataUrl = await this.readImageAsBase64(file);
+      await this.saveFile(file.name, dataUrl);
+      return {
+        name: file.name,
+        sizeLabel,
+        typeLabel,
+        dataUrl,
+        remoteUrl: dataUrl,
+      };
+    }
+
+    const [dataUrl, remoteUrl] = await Promise.all([
+      this.readFileAsDataUrl(file),
+      this.uploadToCloudinary(file, cloudinaryFolder),
+    ]);
+    if (dataUrl) {
+      await this.saveFile(file.name, dataUrl);
+    }
+    return {
+      name: file.name,
+      sizeLabel,
+      typeLabel,
+      dataUrl,
+      remoteUrl,
+    };
+  }
+
+  /**
+   * Uploads a non-image File directly to Cloudinary using signed upload
    * and returns the permanent HTTPS `secure_url`.
    */
-  async uploadToCloudinary(fileOrDataUrl: File | string, folder = 'classlink'): Promise<string> {
+  async uploadToCloudinary(file: File, folder = 'classlink'): Promise<string> {
     const { cloudName, apiKey, apiSecret } = environment.cloudinary;
     const timestamp = Math.round(Date.now() / 1000).toString();
+    const signature = await this.sha1Hex(`folder=${folder}&timestamp=${timestamp}${apiSecret}`);
 
-    // Parameters to sign (sorted alphabetically by key: folder, timestamp)
-    const stringToSign = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
-    const signature = await this.sha1Hex(stringToSign);
-
-    // Cloudinary free accounts block any URL ending in .pdf or .zip with 401 "deny or ACL failure"
-    // unless "Allow delivery of PDF and ZIP files" is toggled in Cloudinary Security settings.
-    // To bypass that restriction automatically, for non-image files we upload to /raw/upload
-    // with a neutral filename (.bin) so Cloudinary's delivery URL never ends in .pdf/.zip,
-    // while ClassLink preserves the real filename & MIME type when previewing or downloading!
-    const isImage =
-      typeof fileOrDataUrl === 'string'
-        ? fileOrDataUrl.startsWith('data:image/')
-        : fileOrDataUrl.type.startsWith('image/');
-    const resourceType = isImage ? 'image' : 'raw';
-
-    let uploadPayload: File | Blob | string = fileOrDataUrl;
-    if (!isImage && fileOrDataUrl instanceof File) {
-      uploadPayload = new File([fileOrDataUrl], 'document.bin', {
-        type: 'application/octet-stream',
-      });
-    }
+    // Use /raw/upload with a neutral .bin filename so Cloudinary free-tier delivery ACLs never block PDFs/ZIPs.
+    const uploadPayload = new File([file], 'document.bin', {
+      type: 'application/octet-stream',
+    });
 
     const formData = new FormData();
     formData.append('file', uploadPayload);
@@ -61,8 +125,7 @@ export class FileStorageService {
     formData.append('folder', folder);
     formData.append('signature', signature);
 
-    const endpoint = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`;
-    const response = await fetch(endpoint, {
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`, {
       method: 'POST',
       body: formData,
     });
@@ -76,11 +139,21 @@ export class FileStorageService {
     return data.secure_url;
   }
 
+  private readFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  }
+
   private async sha1Hex(input: string): Promise<string> {
     const encoded = new TextEncoder().encode(input);
     const hashBuffer = await crypto.subtle.digest('SHA-1', encoded);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    return Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
   }
 
   trustUrl(url: string): SafeResourceUrl {
@@ -115,14 +188,22 @@ export class FileStorageService {
         tx.onerror = () => reject(tx.error);
       });
     } catch {
-      /* fallback */
+      /* IndexedDB unavailable */
     }
+  }
+
+  async removeFile(key: string): Promise<void> {
+    this.memoryCache.delete(key);
     try {
-      if (dataUrlOrRemoteUrl.length < 2_500_000) {
-        localStorage.setItem(`classlink_file_${key}`, dataUrlOrRemoteUrl);
-      }
+      const db = await this.openDb();
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).delete(key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
     } catch {
-      /* ignore quota */
+      /* IndexedDB unavailable */
     }
   }
 
@@ -146,20 +227,12 @@ export class FileStorageService {
         }
       }
     } catch {
-      /* fallback */
-    }
-    for (const k of keys) {
-      try {
-        const ls = localStorage.getItem(`classlink_file_${k}`);
-        if (ls) return ls;
-      } catch {
-        /* ignore */
-      }
+      /* IndexedDB unavailable */
     }
     return '';
   }
 
-  /** Fetches a remote Cloudinary URL as a Blob Object URL with the right MIME type so PDFs render in-app even from /raw/upload. */
+  /** Fetches a remote Cloudinary URL as a Blob Object URL with the right MIME type so PDFs render in-app. */
   async remoteUrlToBlobUrl(
     remoteUrl: string,
     fileName: string,

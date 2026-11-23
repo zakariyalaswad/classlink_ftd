@@ -2,11 +2,19 @@ import { inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { initializeApp } from 'firebase/app';
 import {
-  createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signInWithEmailAndPassword,
-  GoogleAuthProvider, signInWithPopup, signOut, updateProfile, User,
+  createUserWithEmailAndPassword,
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  updateProfile,
+  User,
 } from 'firebase/auth';
 import { environment } from '../../environments/environment';
 import { ApiService } from './api.service';
+import { FileStorageService } from './file-storage.service';
 import { Utilisateur } from './models';
 
 const FIREBASE_ERRORS: Record<string, string> = {
@@ -23,11 +31,12 @@ const FIREBASE_ERRORS: Record<string, string> = {
   'auth/network-request-failed': 'Problème de réseau.',
 };
 
-/** Firebase Authentication (email/password) + application profile held by the API. */
+/** Firebase Authentication (email/password & Google) + application profile held by the API. */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
+  private readonly fileStorage = inject(FileStorageService);
   private readonly auth = getAuth(initializeApp(environment.firebase));
 
   readonly user = signal<User | null>(null);
@@ -59,16 +68,21 @@ export class AuthService {
   }
 
   private async loadProfile(u: User): Promise<void> {
+    let p: Utilisateur;
     try {
-      const p = await this.api.me();
-      const localPhoto = this.localPhoto(u.uid);
-      this.profile.set(localPhoto && !p.photoUrl ? { ...p, photoUrl: localPhoto } : p);
+      p = await this.api.me();
     } catch {
-      // Account created in Firebase but profile missing (e.g. interrupted sign-up): recreate it.
       const [prenom, ...rest] = (u.displayName || u.email?.split('@')[0] || 'Utilisateur').split(' ');
-      const p = await this.api.register(rest.join(' ') || prenom, prenom);
-      const localPhoto = this.localPhoto(u.uid);
-      this.profile.set(localPhoto && !p.photoUrl ? { ...p, photoUrl: localPhoto } : p);
+      p = await this.api.register(rest.join(' ') || prenom, prenom);
+    }
+    const cachedPhoto = await this.fileStorage.getFile([`photo_${u.uid}`]);
+    if (p.photoUrl) {
+      await this.fileStorage.saveFile(`photo_${u.uid}`, p.photoUrl);
+      this.profile.set(p);
+    } else if (cachedPhoto) {
+      this.profile.set({ ...p, photoUrl: cachedPhoto });
+    } else {
+      this.profile.set(p);
     }
   }
 
@@ -82,7 +96,6 @@ export class AuthService {
     await this.router.navigateByUrl('/home');
   }
 
-  /** Google sign-in; the application profile is created on first login from the Google display name. */
   async loginWithGoogle(): Promise<void> {
     try {
       const cred = await signInWithPopup(this.auth, new GoogleAuthProvider());
@@ -110,47 +123,35 @@ export class AuthService {
     await signOut(this.auth);
     this.user.set(null);
     this.profile.set(null);
-    await this.router.navigateByUrl('/login');
+    await this.router.navigateByUrl('/');
   }
 
   async updateProfile(nom: string, prenom: string, photoUrl?: string | null): Promise<void> {
     const uid = this.user()?.uid;
     if (uid && photoUrl !== undefined) {
-      try {
-        if (photoUrl) localStorage.setItem(`classlink_photo_${uid}`, photoUrl);
-        else localStorage.removeItem(`classlink_photo_${uid}`);
-      } catch {
-        /* ignore quota errors */
+      if (photoUrl) {
+        await this.fileStorage.saveFile(`photo_${uid}`, photoUrl);
+      } else {
+        await this.fileStorage.removeFile(`photo_${uid}`);
       }
     }
-    const updated = await this.api.updateProfile(nom, prenom, photoUrl);
-    const finalPhoto = photoUrl !== undefined ? photoUrl : (updated.photoUrl ?? (uid ? this.localPhoto(uid) : null));
-    this.profile.set({ ...updated, photoUrl: finalPhoto });
+    const updated = await this.api.updateProfile(nom, prenom, photoUrl ?? '');
+    this.profile.set({ ...updated, photoUrl: photoUrl !== undefined ? photoUrl : (updated.photoUrl ?? null) });
   }
 
   photoUrl(): string | null {
-    const p = this.profile();
-    if (p?.photoUrl) return p.photoUrl;
-    const uid = this.user()?.uid;
-    return uid ? this.localPhoto(uid) : null;
-  }
-
-  private localPhoto(uid: string): string | null {
-    try {
-      return localStorage.getItem(`classlink_photo_${uid}`);
-    } catch {
-      return null;
-    }
+    return this.profile()?.photoUrl || null;
   }
 
   fullName(): string {
     const p = this.profile();
-    return p ? `${p.prenom} ${p.nom}` : '';
+    return p ? `${p.prenom} ${p.nom}`.trim() : '';
   }
 
   private async settled(): Promise<void> {
-    // wait until onAuthStateChanged has loaded the profile
-    for (let i = 0; i < 50 && !this.profile(); i++) await new Promise((r) => setTimeout(r, 100));
+    for (let i = 0; i < 50 && !this.profile(); i++) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
   }
 
   private friendly(e: unknown): Error {

@@ -58,6 +58,7 @@ export class ApiService {
   regenerateCode(id: string) { return this.post<{ codeAcces: string }>(`/classes/${id}/regenerate-code`); }
   archive(id: string, archivee: boolean) { return this.put<Classe>(`/classes/${id}/archive?archivee=${archivee}`); }
   deleteClass(id: string) { return this.del<unknown>(`/classes/${id}`); }
+  leaveClass(id: string) { return this.del<unknown>(`/classes/${id}/leave`); }
   canAnnounce(classId: string) { return this.get<{ allowed: boolean }>(`/classes/${classId}/check-announcement-permission`); }
 
   // --- publications

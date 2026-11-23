@@ -74,21 +74,53 @@ import { IconComponent } from '../shared/icon.component';
         <!-- Class cards grid -->
         <div class="grid sm:grid-cols-2 gap-4">
           @for (c of filteredClasses(); track c.id) {
-            <a
-              [routerLink]="['/classes', c.id]"
-              class="group bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs hover:shadow-md hover:border-blue-300 transition-all flex flex-col"
+            <div
+              class="group relative bg-white rounded-2xl border border-slate-200/80 shadow-2xs hover:shadow-md hover:border-blue-300 transition-all flex flex-col"
+              [class.z-20]="menuId() === c.id"
             >
               <!-- Colored Top Banner -->
               <div
-                class="h-24 p-4 relative flex items-start justify-between text-white"
+                class="h-24 p-4 relative flex items-start justify-between text-white rounded-t-2xl cursor-pointer"
                 [class]="store.themeForClass(c.id).bannerBg"
+                (click)="openClass(c.id)"
               >
                 <span class="text-[10px] font-extrabold uppercase tracking-wider text-white/90">
                   {{ c.matiere || 'INFORMATIQUE' }}
                 </span>
-                <span class="text-white/80 group-hover:text-white">
+                <button
+                  type="button"
+                  (click)="toggleMenu(c.id, $event)"
+                  class="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-0.5 -m-0.5"
+                  aria-label="Actions de la classe"
+                >
                   <app-icon name="more" [size]="18" />
-                </span>
+                </button>
+
+                @if (menuId() === c.id) {
+                  <div class="fixed inset-0 z-30 cursor-default" (click)="closeMenu($event)"></div>
+                  <div
+                    class="absolute right-3 top-11 z-40 w-56 bg-white text-[#182033] rounded-xl shadow-lg border border-slate-200/80 py-1.5"
+                    (click)="$event.stopPropagation()"
+                  >
+                    @if (store.viewRole() === 'ENSEIGNANT') {
+                      <button
+                        type="button"
+                        (click)="archive(c.id)"
+                        class="w-full text-left flex items-center gap-2 px-4 py-2 text-xs font-semibold hover:bg-slate-50"
+                      >
+                        <app-icon name="archive" [size]="15" /> Archiver la classe
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        (click)="leave(c.id)"
+                        class="w-full text-left flex items-center gap-2 px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                      >
+                        Se déconnecter de la classe
+                      </button>
+                    }
+                  </div>
+                }
 
                 <!-- Overlapping floating book badge -->
                 <div
@@ -101,7 +133,7 @@ import { IconComponent } from '../shared/icon.component';
 
               <!-- White Body -->
               <div class="p-4 pt-6 flex-1 flex flex-col justify-between">
-                <div>
+                <a [routerLink]="['/classes', c.id]" class="block">
                   <h3 class="font-extrabold text-[15px] text-[#182033] group-hover:text-[#2454d6] transition-colors">
                     {{ c.nom }}
                     @if (c.archivee) {
@@ -111,19 +143,23 @@ import { IconComponent } from '../shared/icon.component';
                   <p class="text-xs text-slate-500 mt-0.5">
                     {{ store.teacherNameForClass(c.id) }}
                   </p>
-                </div>
+                </a>
 
-                <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                <a
+                  [routerLink]="['/classes', c.id]"
+                  [queryParams]="{ tab: 'MEMBERS' }"
+                  class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 hover:text-[#2454d6]"
+                >
                   <span class="inline-flex items-center gap-1.5">
                     <app-icon name="users" [size]="14" />
                     {{ store.memberCountForClass(c.id) }} membre(s)
                   </span>
-                  <span class="text-slate-400 group-hover:text-[#2454d6] group-hover:translate-x-0.5 transition-all">
+                  <span class="text-slate-400 group-hover:text-[#2454d6] transition-all">
                     <app-icon name="arrow" [size]="15" />
                   </span>
-                </div>
+                </a>
               </div>
-            </a>
+            </div>
           } @empty {
             <div class="sm:col-span-2 bg-white rounded-2xl border border-slate-200/80 p-8 text-center">
               <p class="text-sm font-bold text-[#182033]">
@@ -182,6 +218,40 @@ import { IconComponent } from '../shared/icon.component';
         </div>
       </aside>
     </div>
+
+    <!-- Modal: Se déconnecter de la classe -->
+    @if (leaveTarget(); as t) {
+      <div
+        class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+        (click)="leaveTarget.set(null)"
+      >
+        <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center" (click)="$event.stopPropagation()">
+          <div class="w-14 h-14 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-extrabold text-[#182033]">Quitter cette classe ?</h3>
+          <p class="text-sm font-bold text-[#2454d6] mt-1">{{ t.nom }}</p>
+          <p class="text-xs text-slate-500 mt-3 leading-relaxed">
+            Vous n'aurez plus accès aux cours, devoirs et notes de cette classe. Vous pourrez la rejoindre à nouveau avec son code d'accès.
+          </p>
+          <div class="flex gap-2 mt-6">
+            <button type="button" (click)="leaveTarget.set(null)" class="btn-light flex-1 !text-xs">Annuler</button>
+            <button
+              type="button"
+              (click)="confirmLeave()"
+              [disabled]="leaving()"
+              class="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl px-4 py-2.5 transition-colors"
+            >
+              {{ leaving() ? 'Déconnexion...' : 'Oui, quitter' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    }
 
     <!-- Modal: Créer une classe -->
     @if (createModalOpen()) {
@@ -260,6 +330,53 @@ export class HomeComponent {
   createModalOpen = signal(false);
   joinModalOpen = signal(false);
   modalError = signal('');
+  menuId = signal<string | null>(null);
+
+  openClass(id: string): void {
+    void this.router.navigate(['/classes', id]);
+  }
+
+  toggleMenu(id: string, ev: Event): void {
+    ev.stopPropagation();
+    this.menuId.update((cur) => (cur === id ? null : id));
+  }
+
+  closeMenu(ev: Event): void {
+    ev.stopPropagation();
+    this.menuId.set(null);
+  }
+
+  async archive(id: string): Promise<void> {
+    this.menuId.set(null);
+    try {
+      await this.api.archive(id, true);
+      await this.store.refresh();
+    } catch (e) {
+      this.store.error.set((e as Error).message);
+    }
+  }
+
+  leaveTarget = signal<{ id: string; nom: string } | null>(null);
+  leaving = signal(false);
+
+  leave(id: string): void {
+    this.menuId.set(null);
+    this.leaveTarget.set({ id, nom: this.store.className(id) });
+  }
+
+  async confirmLeave(): Promise<void> {
+    const t = this.leaveTarget();
+    if (!t) return;
+    this.leaving.set(true);
+    try {
+      await this.store.leaveClass(t.id);
+      this.leaveTarget.set(null);
+    } catch (e) {
+      this.store.error.set((e as Error).message);
+    } finally {
+      this.leaving.set(false);
+    }
+  }
 
   readonly filteredClasses = computed(() => {
     const q = this.search.trim().toLowerCase();

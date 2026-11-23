@@ -1,10 +1,11 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../core/auth.service';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-login',
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   template: `
     <main class="min-h-screen flex items-center justify-center p-4">
       <form (ngSubmit)="submit()" class="card w-full max-w-sm space-y-3">
@@ -26,13 +27,15 @@ import { AuthService } from '../core/auth.service';
         <button type="button" class="text-sm text-blue-700 hover:underline w-full" (click)="toggle()">
           {{ mode() === 'login' ? 'Pas de compte ? Inscription' : 'Déjà inscrit ? Connexion' }}
         </button>
+        <a routerLink="/" class="block text-center text-xs text-slate-400 hover:underline">← Retour à l'accueil</a>
       </form>
     </main>
   `,
 })
 export class LoginComponent {
   private readonly auth = inject(AuthService);
-  mode = signal<'login' | 'signup'>('login');
+  private readonly route = inject(ActivatedRoute);
+  mode = signal<'login' | 'signup'>(this.route.snapshot.queryParamMap.get('mode') === 'signup' ? 'signup' : 'login');
   busy = signal(false);
   error = signal('');
   email = ''; password = ''; nom = ''; prenom = '';

@@ -143,7 +143,7 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
                     (click)="composerExpanded.set(true)"
                     class="w-full flex items-center gap-3 text-left"
                   >
-                    <app-avatar [name]="auth.fullName() || 'Camille Dupont'" size="medium" />
+                    <app-avatar [name]="auth.fullName() || 'Camille Dupont'" [photoUrl]="auth.photoUrl()" size="medium" />
                     <span class="flex-1 rounded-full bg-[#f5f7fb] px-4 py-2.5 text-xs text-slate-400 hover:bg-slate-100 transition-colors">
                       Annoncez quelque chose à votre classe...
                     </span>
@@ -192,7 +192,7 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
                     <div class="flex items-center justify-between gap-2">
                       <label class="btn-light !text-xs cursor-pointer gap-1.5">
                         <app-icon name="file" [size]="14" />
-                        {{ uploadingPublicationFile() ? 'Envoi sur Cloudinary...' : 'Joindre un fichier' }}
+                        {{ uploadingPublicationFile() ? 'Préparation du fichier...' : 'Joindre un fichier' }}
                         <input
                           type="file"
                           class="hidden"
@@ -389,7 +389,7 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
             <div class="divide-y divide-slate-100">
               @for (m of teachers(); track m.id) {
                 <div class="py-3 flex items-center gap-3">
-                  <app-avatar [name]="m.prenomUtilisateur + ' ' + m.nomUtilisateur" size="medium" />
+                  <app-avatar [name]="m.prenomUtilisateur + ' ' + m.nomUtilisateur" [photoUrl]="m.photoUrlUtilisateur" size="medium" />
                   <div>
                     <p class="text-xs font-bold text-[#182033]">{{ m.prenomUtilisateur }} {{ m.nomUtilisateur }}</p>
                     <p class="text-[11px] text-slate-400">Enseignant</p>
@@ -410,7 +410,7 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
             <div class="divide-y divide-slate-100">
               @for (m of students(); track m.id) {
                 <div class="py-3 flex items-center gap-3">
-                  <app-avatar [name]="m.prenomUtilisateur + ' ' + m.nomUtilisateur" size="medium" />
+                  <app-avatar [name]="m.prenomUtilisateur + ' ' + m.nomUtilisateur" [photoUrl]="m.photoUrlUtilisateur" size="medium" />
                   <div>
                     <p class="text-xs font-bold text-[#182033]">{{ m.prenomUtilisateur }} {{ m.nomUtilisateur }}</p>
                     <p class="text-[11px] text-slate-400">Étudiant</p>
@@ -446,7 +446,7 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
                   <tr class="hover:bg-slate-50/70">
                     <td class="py-3.5 px-5">
                       <div class="flex items-center gap-3">
-                        <app-avatar [name]="s.prenomUtilisateur + ' ' + s.nomUtilisateur" size="small" />
+                        <app-avatar [name]="s.prenomUtilisateur + ' ' + s.nomUtilisateur" [photoUrl]="s.photoUrlUtilisateur" size="small" />
                         <span class="font-bold text-[#182033]">{{ s.prenomUtilisateur }} {{ s.nomUtilisateur }}</span>
                       </div>
                     </td>
@@ -589,7 +589,7 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
                 } @else {
                   <label class="btn-light !text-xs cursor-pointer gap-1.5 w-full">
                     <app-icon name="file" [size]="14" />
-                    {{ uploadingPublicationFile() ? 'Envoi sur Cloudinary...' : 'Choisir un fichier à joindre' }}
+                    {{ uploadingPublicationFile() ? 'Préparation du fichier...' : 'Choisir un fichier à joindre' }}
                     <input
                       type="file"
                       class="hidden"
@@ -672,6 +672,8 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
 })
 export class ClassDetailComponent {
   readonly id = input.required<string>();
+  /** Optional ?tab=MEMBERS|WORK|GRADES|STREAM query param */
+  readonly tab = input<string | undefined>();
   private readonly api = inject(ApiService);
   readonly auth = inject(AuthService);
   readonly store = inject(StoreService);
@@ -760,6 +762,10 @@ export class ClassDetailComponent {
 
   constructor() {
     effect(() => {
+      const t = (this.tab() ?? '').toUpperCase();
+      this.activeTab.set(this.tabs.some((x) => x.id === t) ? (t as ClassTab) : 'STREAM');
+    });
+    effect(() => {
       void this.load(this.id());
     });
   }
@@ -838,32 +844,11 @@ export class ClassDetailComponent {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    const sizeLabel =
-      file.size >= 1024 * 1024
-        ? `${(file.size / (1024 * 1024)).toFixed(1).replace('.', ',')} Mo`
-        : `${Math.max(1, Math.round(file.size / 1024))} Ko`;
-    const ext = (file.name.split('.').pop() || 'FICHIER').toUpperCase();
-
-    const dataUrlPromise = new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-      reader.onerror = () => resolve('');
-      reader.readAsDataURL(file);
-    });
 
     this.uploadingPublicationFile.set(true);
     try {
-      const [dataUrl, remoteUrl] = await Promise.all([
-        dataUrlPromise,
-        this.fileStorage.uploadToCloudinary(file, 'classlink/publications'),
-      ]);
-      this.composerAttachment.set({
-        name: file.name,
-        sizeLabel,
-        typeLabel: ext,
-        dataUrl,
-        remoteUrl,
-      });
+      const att = await this.fileStorage.prepareAttachment(file, 'classlink/publications');
+      this.composerAttachment.set(att);
     } catch (e) {
       this.error.set((e as Error).message);
     } finally {

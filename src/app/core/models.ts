@@ -9,7 +9,7 @@ export type TypeNotification =
   | 'RAPPEL_ECHEANCE'
   | 'NOUVEAU_COMMENTAIRE'
   | 'NOUVELLE_REMISE'
-  | 'REMISE_CORRIGEE'
+  | 'NOTE_PUBLIEE'
   | string;
 
 export interface Utilisateur {
@@ -45,6 +45,7 @@ export interface Inscription {
   nomUtilisateur: string;
   prenomUtilisateur: string;
   emailUtilisateur: string;
+  photoUrlUtilisateur?: string | null;
 }
 
 export interface Publication {
@@ -52,6 +53,7 @@ export interface Publication {
   classeId: string;
   auteurId: string;
   nomAuteur: string;
+  photoUrlAuteur?: string | null;
   type: TypePublication;
   titre: string;
   contenu: string;
@@ -65,6 +67,7 @@ export interface Commentaire {
   publicationId: string;
   auteurId: string;
   nomAuteur: string;
+  photoUrlAuteur?: string | null;
   contenu: string;
   dateCreation: string;
 }

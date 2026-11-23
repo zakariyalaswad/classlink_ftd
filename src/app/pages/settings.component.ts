@@ -20,7 +20,7 @@ const DEFAULT_NOTIFICATION_ROWS: { type: string; label: string; defaultEmail: bo
   { type: 'RAPPEL_ECHEANCE', label: "Rappel d'échéance", defaultEmail: true },
   { type: 'NOUVEAU_COMMENTAIRE', label: 'Nouveau commentaire', defaultEmail: false },
   { type: 'NOUVELLE_REMISE', label: 'Nouvelle remise', defaultEmail: true },
-  { type: 'REMISE_CORRIGEE', label: 'Note publiée', defaultEmail: true },
+  { type: 'NOTE_PUBLIEE', label: 'Note publiée', defaultEmail: true },
 ];
 
 @Component({
@@ -77,7 +77,7 @@ const DEFAULT_NOTIFICATION_ROWS: { type: string; label: string; defaultEmail: bo
               </div>
             }
             <label class="mt-3 text-xs font-bold text-[#2454d6] hover:underline cursor-pointer">
-              {{ uploadingPhoto() ? 'Envoi sur Cloudinary...' : 'Choisir une photo' }}
+              {{ uploadingPhoto() ? 'Traitement...' : 'Choisir une photo' }}
               <input
                 type="file"
                 accept="image/*"
@@ -354,9 +354,14 @@ export class SettingsComponent implements OnInit {
     }
     this.uploadingPhoto.set(true);
     try {
-      const cloudUrl = await this.fileStorage.uploadToCloudinary(file, 'classlink/avatars');
-      this.photoDataUrl.set(cloudUrl);
-      this.msg.set('Photo envoyée sur Cloudinary ! Cliquez sur « Enregistrer » pour valider.');
+      const base64DataUrl = await this.fileStorage.readImageAsBase64(file, 512);
+      await this.fileStorage.saveFile(file.name, base64DataUrl);
+      const uid = this.auth.user()?.uid;
+      if (uid) {
+        await this.fileStorage.saveFile(`photo_${uid}`, base64DataUrl);
+      }
+      this.photoDataUrl.set(base64DataUrl);
+      this.msg.set('Photo prête (enregistrée dans IndexedDB). Cliquez sur « Enregistrer » pour sauvegarder dans Firebase.');
     } catch (e) {
       this.err.set((e as Error).message);
     } finally {
@@ -367,29 +372,6 @@ export class SettingsComponent implements OnInit {
 
   removePhoto(): void {
     this.photoDataUrl.set(null);
-  }
-
-  private resizeImage(dataUrl: string, maxW: number, maxH: number): Promise<string> {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const ratio = Math.min(maxW / img.width, maxH / img.height, 1);
-        const w = Math.round(img.width * ratio);
-        const h = Math.round(img.height * ratio);
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL('image/jpeg', 0.85));
-        } else {
-          resolve(dataUrl);
-        }
-      };
-      img.onerror = () => resolve(dataUrl);
-      img.src = dataUrl;
-    });
   }
 
   toggleApp(row: NotificationRow): void {

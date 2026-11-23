@@ -33,7 +33,7 @@ interface PreviewModalData {
       <!-- Author Header -->
       <div class="flex items-start justify-between gap-3">
         <div class="flex items-center gap-3">
-          <app-avatar [name]="pub().nomAuteur || 'Enseignant'" size="medium" />
+          <app-avatar [name]="pub().nomAuteur || 'Enseignant'" [photoUrl]="pub().photoUrlAuteur" size="medium" />
           <div>
             <div class="flex items-center gap-2">
               <h3 class="text-sm font-bold text-[#182033]">{{ pub().nomAuteur }}</h3>
@@ -242,7 +242,7 @@ interface PreviewModalData {
               <div class="flex flex-wrap items-center gap-2">
                 <label class="btn-light !py-1.5 !px-3 !text-xs cursor-pointer gap-1.5">
                   <app-icon name="file" [size]="14" />
-                  {{ uploadingFile() ? 'Envoi sur Cloudinary...' : 'Joindre un fichier (PDF, ZIP, image...)' }}
+                  {{ uploadingFile() ? 'Préparation du fichier...' : 'Joindre un fichier (PDF, ZIP, image...)' }}
                   <input
                     type="file"
                     class="hidden"
@@ -272,7 +272,7 @@ interface PreviewModalData {
           <div class="space-y-2.5">
             @for (c of comments(); track c.id) {
               <div class="flex items-start gap-2.5">
-                <app-avatar [name]="c.nomAuteur" size="small" />
+                <app-avatar [name]="c.nomAuteur" [photoUrl]="c.photoUrlAuteur" size="small" />
                 <div class="bg-[#f5f7fb] rounded-2xl px-3.5 py-2 text-xs">
                   <p class="font-bold text-[#182033]">{{ c.nomAuteur }}</p>
                   <p class="text-slate-700 mt-0.5">{{ c.contenu }}</p>
@@ -432,18 +432,24 @@ export class PublicationCardComponent implements OnInit {
     const regex = new RegExp(FILE_MARKER_REGEX.source, 'g');
     let m: RegExpExecArray | null;
     while ((m = regex.exec(raw)) !== null) {
+      const payload = m[4] || '';
+      const isBase64 = payload.startsWith('data:');
       out.push({
         name: m[1],
         typeLabel: m[2],
         sizeLabel: m[3],
-        dataUrl: '',
-        remoteUrl: m[4] || undefined,
+        dataUrl: isBase64 ? payload : '',
+        remoteUrl: !isBase64 && payload ? payload : undefined,
       });
     }
     return out;
   }
 
   async openFileViewer(att: StoredFileAttachment, prefix: string): Promise<void> {
+    if (att.dataUrl && att.dataUrl.startsWith('data:')) {
+      await this.fileStorage.saveFile(`${prefix}_${att.name}`, att.dataUrl);
+      await this.fileStorage.saveFile(att.name, att.dataUrl);
+    }
     const stored =
       att.dataUrl ||
       (await this.fileStorage.getFile([`${prefix}_${att.name}`, att.name]));
@@ -515,33 +521,11 @@ export class PublicationCardComponent implements OnInit {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    const sizeLabel =
-      file.size >= 1024 * 1024
-        ? `${(file.size / (1024 * 1024)).toFixed(1).replace('.', ',')} Mo`
-        : `${Math.max(1, Math.round(file.size / 1024))} Ko`;
-    const ext = (file.name.split('.').pop() || 'FICHIER').toUpperCase();
-
-    // Read locally for immediate in-app preview & upload to Cloudinary in parallel
-    const dataUrlPromise = new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-      reader.onerror = () => resolve('');
-      reader.readAsDataURL(file);
-    });
 
     this.uploadingFile.set(true);
     try {
-      const [dataUrl, remoteUrl] = await Promise.all([
-        dataUrlPromise,
-        this.fileStorage.uploadToCloudinary(file, 'classlink/submissions'),
-      ]);
-      this.submissionAttachment.set({
-        name: file.name,
-        sizeLabel,
-        typeLabel: ext,
-        dataUrl,
-        remoteUrl,
-      });
+      const att = await this.fileStorage.prepareAttachment(file, 'classlink/submissions');
+      this.submissionAttachment.set(att);
     } catch (e) {
       this.error.set((e as Error).message);
     } finally {

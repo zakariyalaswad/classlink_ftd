@@ -75,9 +75,6 @@ import { Component, Input } from '@angular/core';
           <path d="m22 2-7 20-4-9-9-4Z" />
           <path d="M22 2 11 13" />
         }
-        @case ('back') {
-          <path d="m15 18-6-6 6-6" />
-        }
         @case ('archive') {
           <rect x="2" y="4" width="20" height="5" rx="1" />
           <path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9" />

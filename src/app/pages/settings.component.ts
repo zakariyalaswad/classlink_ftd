@@ -191,7 +191,7 @@ const DEFAULT_NOTIFICATION_ROWS: { type: string; label: string; defaultEmail: bo
           </div>
           <div>
             <h2 class="text-base font-extrabold text-[#182033]">Notifications</h2>
-            <p class="text-xs text-slate-400">Les emails sont simulés dans ce prototype.</p>
+            <p class="text-xs text-slate-400">Choisissez comment vous souhaitez être alerté(e).</p>
           </div>
         </div>
 
@@ -201,7 +201,7 @@ const DEFAULT_NOTIFICATION_ROWS: { type: string; label: string; defaultEmail: bo
             <div class="col-span-6 sm:col-span-8">Type de notification</div>
             <div class="col-span-3 sm:col-span-2 text-center">Dans l'application</div>
             <div class="col-span-3 sm:col-span-2 text-center">
-              Par email <span class="font-normal text-slate-400">(simulé)</span>
+              Par email
             </div>
           </div>
 

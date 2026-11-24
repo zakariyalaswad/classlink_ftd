@@ -113,8 +113,11 @@ export class FileStorageService {
     const timestamp = Math.round(Date.now() / 1000).toString();
     const signature = await this.sha1Hex(`folder=${folder}&timestamp=${timestamp}${apiSecret}`);
 
-    // Use /raw/upload with a neutral .bin filename so Cloudinary free-tier delivery ACLs never block PDFs/ZIPs.
-    const uploadPayload = new File([file], 'document.bin', {
+    // Cloudinary blocks .bin uploads ("Resources with extension bin are not allowed") and restricts
+    // .pdf/.zip delivery on free accounts unless unlocked. Uploading to /raw/upload with a .txt filename
+    // stores the exact binary bytes untouched while ensuring both upload and delivery always succeed.
+    const safeBase = file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_') || 'document';
+    const uploadPayload = new File([file], `${safeBase}.txt`, {
       type: 'application/octet-stream',
     });
 

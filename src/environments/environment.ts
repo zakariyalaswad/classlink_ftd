@@ -1,5 +1,5 @@
 export const environment = {
-  apiUrl: 'http://localhost:8081/api',
+  apiUrl: 'https://classlink-backend-8cv7.onrender.com/api',
   firebase: {
     apiKey: 'AIzaSyAlVi41KCuNhrVTqQUIPRM9_QSn6f9EdzY',
     authDomain: 'claink-b3eb5.firebaseapp.com',

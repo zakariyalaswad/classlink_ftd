@@ -105,7 +105,7 @@ export class FileStorageService {
   }
 
   /**
-   * Uploads a non-image File directly to Cloudinary using signed upload
+   * Uploads a non-image File directly to Cloudinary using signed upload in its original file type
    * and returns the permanent HTTPS `secure_url`.
    */
   async uploadToCloudinary(file: File, folder = 'classlink'): Promise<string> {
@@ -113,22 +113,14 @@ export class FileStorageService {
     const timestamp = Math.round(Date.now() / 1000).toString();
     const signature = await this.sha1Hex(`folder=${folder}&timestamp=${timestamp}${apiSecret}`);
 
-    // Cloudinary blocks .bin uploads ("Resources with extension bin are not allowed") and restricts
-    // .pdf/.zip delivery on free accounts unless unlocked. Uploading to /raw/upload with a .txt filename
-    // stores the exact binary bytes untouched while ensuring both upload and delivery always succeed.
-    const safeBase = file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_') || 'document';
-    const uploadPayload = new File([file], `${safeBase}.txt`, {
-      type: 'application/octet-stream',
-    });
-
     const formData = new FormData();
-    formData.append('file', uploadPayload);
+    formData.append('file', file, file.name);
     formData.append('api_key', apiKey);
     formData.append('timestamp', timestamp);
     formData.append('folder', folder);
     formData.append('signature', signature);
 
-    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`, {
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
       method: 'POST',
       body: formData,
     });

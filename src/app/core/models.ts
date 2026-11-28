@@ -83,8 +83,11 @@ export interface Remise {
   correction?: string | null;
 }
 
+export type EmailStatus = 'PENDING' | 'SENT' | 'FAILED';
+
 export interface AppNotification {
   id: string;
+  utilisateurId?: string;
   classeId: string;
   nomClasse: string;
   type: TypeNotification;
@@ -93,6 +96,11 @@ export interface AppNotification {
   lienCible?: string | null;
   dateCreation: string;
   dateLecture?: string | null;
+  emailStatus?: EmailStatus | null;
+  destinataireEmail?: string | null;
+  emailAttempts?: number | null;
+  emailSentAt?: string | null;
+  emailError?: string | null;
 }
 
 export interface PreferenceNotification {

@@ -13,15 +13,15 @@ interface NotificationRow {
   parEmail: boolean;
 }
 
-const DEFAULT_NOTIFICATION_ROWS: { type: string; label: string; defaultEmail: boolean }[] = [
-  { type: 'NOUVELLE_ANNONCE', label: 'Nouvelle annonce', defaultEmail: true },
-  { type: 'NOUVEAU_COURS', label: 'Nouveau cours', defaultEmail: true },
-  { type: 'NOUVEAU_DEVOIR', label: 'Nouveau devoir', defaultEmail: true },
-  { type: 'RAPPEL_ECHEANCE', label: "Rappel d'échéance", defaultEmail: true },
-  { type: 'NOUVEAU_COMMENTAIRE', label: 'Nouveau commentaire', defaultEmail: false },
-  { type: 'NOUVELLE_REMISE', label: 'Nouvelle remise', defaultEmail: true },
-  { type: 'NOTE_PUBLIEE', label: 'Note publiée', defaultEmail: true },
-];
+const NOTIFICATION_LABELS: Record<string, string> = {
+  NOUVELLE_ANNONCE: 'Nouvelle annonce',
+  NOUVEAU_COURS: 'Nouveau cours',
+  NOUVEAU_DEVOIR: 'Nouveau devoir',
+  RAPPEL_ECHEANCE: "Rappel d'échéance",
+  NOUVEAU_COMMENTAIRE: 'Nouveau commentaire',
+  NOUVELLE_REMISE: 'Nouvelle remise',
+  NOTE_PUBLIEE: 'Note publiée',
+};
 
 @Component({
   selector: 'app-settings',
@@ -274,14 +274,7 @@ export class SettingsComponent implements OnInit {
   newPassword = '';
   confirmPassword = '';
 
-  rows = signal<NotificationRow[]>(
-    DEFAULT_NOTIFICATION_ROWS.map((r) => ({
-      type: r.type,
-      label: r.label,
-      dansApplication: true,
-      parEmail: r.defaultEmail,
-    })),
-  );
+  rows = signal<NotificationRow[]>([]);
 
   saving = signal(false);
   msg = signal('');
@@ -298,13 +291,16 @@ export class SettingsComponent implements OnInit {
         if (this.photoDataUrl() === null && this.auth.photoUrl()) {
           this.photoDataUrl.set(this.auth.photoUrl());
         }
+        void this.loadPreferences();
       }
     });
   }
 
   async ngOnInit(): Promise<void> {
     this.loadFromProfile();
-    await this.loadPreferences();
+    if (this.auth.profile()) {
+      await this.loadPreferences();
+    }
   }
 
   private loadFromProfile(): void {
@@ -318,17 +314,13 @@ export class SettingsComponent implements OnInit {
 
   private async loadPreferences(): Promise<void> {
     const prefs = await this.api.getPreferences().catch(() => [] as PreferenceNotification[]);
-    const byType = new Map(prefs.map((p) => [p.type, p]));
     this.rows.set(
-      DEFAULT_NOTIFICATION_ROWS.map((def) => {
-        const match = byType.get(def.type);
-        return {
-          type: def.type,
-          label: def.label,
-          dansApplication: match ? match.dansApplication : true,
-          parEmail: match ? match.parEmail : def.defaultEmail,
-        };
-      }),
+      prefs.map((p) => ({
+        type: p.type,
+        label: NOTIFICATION_LABELS[p.type] || p.type,
+        dansApplication: Boolean(p.dansApplication),
+        parEmail: Boolean(p.parEmail),
+      })),
     );
   }
 
@@ -375,15 +367,19 @@ export class SettingsComponent implements OnInit {
   }
 
   toggleApp(row: NotificationRow): void {
+    const nextVal = !row.dansApplication;
     this.rows.update((list) =>
-      list.map((r) => (r.type === row.type ? { ...r, dansApplication: !r.dansApplication } : r)),
+      list.map((r) => (r.type === row.type ? { ...r, dansApplication: nextVal } : r)),
     );
+    void this.api.updatePreference(row.type, nextVal, row.parEmail).catch(() => undefined);
   }
 
   toggleEmail(row: NotificationRow): void {
+    const nextVal = !row.parEmail;
     this.rows.update((list) =>
-      list.map((r) => (r.type === row.type ? { ...r, parEmail: !r.parEmail } : r)),
+      list.map((r) => (r.type === row.type ? { ...r, parEmail: nextVal } : r)),
     );
+    void this.api.updatePreference(row.type, row.dansApplication, nextVal).catch(() => undefined);
   }
 
   async reset(): Promise<void> {

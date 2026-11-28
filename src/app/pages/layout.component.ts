@@ -331,7 +331,9 @@ export class LayoutComponent {
       await this.api.markRead(n.id).catch(() => undefined);
       await this.store.refreshNotifications();
     }
-    if (n.classeId) {
+    if (n.lienCible) {
+      await this.router.navigateByUrl(n.lienCible);
+    } else if (n.classeId) {
       await this.router.navigate(['/classes', n.classeId]);
     }
   }

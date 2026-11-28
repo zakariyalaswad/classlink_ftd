@@ -37,6 +37,6 @@
 @layer components {
   .card { @apply bg-white rounded-2xl border border-slate-200 p-5 shadow-xs; }
   .input { @apply w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white; }
-  .btn { @apply bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold rounded-xl px-4 py-2 text-sm; }
-  .btn-light { @apply bg-white hover:bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold inline-flex items-center justify-center; }
+  .btn { @apply bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold rounded-xl px-4 py-2 text-sm inline-flex items-center justify-center gap-2 transition-colors; }
+  .btn-light { @apply bg-white hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2 transition-colors; }
 }

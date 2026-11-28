@@ -1,4 +1,6 @@
 import { computed, effect, inject, Injectable, signal } from '@angular/core';
+import { DataSnapshot, getDatabase, onValue, ref, Unsubscribe } from 'firebase/database';
+import { environment } from '../../environments/environment';
 import { ApiService } from './api.service';
 import { AuthService } from './auth.service';
 import { AppNotification, Classe, Inscription, Publication, RoleClasse } from './models';
@@ -42,7 +44,30 @@ const THEMES: ClassTheme[] = [
   },
 ];
 
-/** Shared app state (classes, deadlines, notifications, active role) loaded from the API. */
+function serializeClassForDiff(c: Classe): string {
+  return JSON.stringify({
+    id: c.id,
+    nom: c.nom,
+    description: c.description,
+    matiere: c.matiere,
+    codeAcces: c.codeAcces,
+    archivee: Boolean(c.archivee),
+    parametres: c.parametres ?? null,
+  });
+}
+
+function hasClassesDiff(prev: Classe[], next: Classe[]): boolean {
+  if (prev.length !== next.length) return true;
+  const prevById = new Map(prev.map((c) => [c.id, serializeClassForDiff(c)]));
+  for (const c of next) {
+    if (prevById.get(c.id) !== serializeClassForDiff(c)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Shared app state (classes, deadlines, notifications, active role) with Firebase realtime snapshot sync. */
 @Injectable({ providedIn: 'root' })
 export class StoreService {
   private readonly api = inject(ApiService);
@@ -90,14 +115,18 @@ export class StoreService {
   });
 
   private timer: ReturnType<typeof setInterval> | null = null;
+  private fallbackClassPollTimer: ReturnType<typeof setInterval> | null = null;
+  private realtimeUnsubscribers: Unsubscribe[] = [];
+  private latestClassesSnapshot: Record<string, Classe> | null = null;
 
   constructor() {
     effect(() => {
-      const logged = !!this.auth.user() && !!this.auth.profile();
-      if (this.timer) clearInterval(this.timer);
-      this.timer = null;
-      if (logged) {
+      const u = this.auth.user();
+      const logged = !!u && !!this.auth.profile();
+      this.cleanupTimersAndListeners();
+      if (logged && u) {
         void this.refresh();
+        this.attachOnSnapshotListeners(u.uid);
         this.timer = setInterval(() => void this.refreshNotifications(), 30000);
       } else {
         this.classes.set([]);
@@ -109,6 +138,147 @@ export class StoreService {
     });
   }
 
+  private cleanupTimersAndListeners(): void {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    if (this.fallbackClassPollTimer) {
+      clearInterval(this.fallbackClassPollTimer);
+      this.fallbackClassPollTimer = null;
+    }
+    for (const unsub of this.realtimeUnsubscribers) {
+      try {
+        unsub();
+      } catch {
+        /* ignore cleanup errors */
+      }
+    }
+    this.realtimeUnsubscribers = [];
+    this.latestClassesSnapshot = null;
+  }
+
+  /**
+   * Subscribes to real-time Firebase snapshots on `classes`, `inscriptions`, and `publications`
+   * so any modification to a class (name, settings, archive state, access code, members, or posts)
+   * updates state immediately when a diff is detected. Falls back cleanly to diff-polling if RTDB
+   * client rules restrict direct SDK reads.
+   */
+  private attachOnSnapshotListeners(uid: string): void {
+    if (!this.auth.firebaseApp) {
+      return;
+    }
+    try {
+      const db = getDatabase(this.auth.firebaseApp, environment.firebase.databaseURL);
+
+      const onSnapshotError = () => {
+        if (!this.fallbackClassPollTimer) {
+          this.fallbackClassPollTimer = setInterval(() => void this.syncClassesDiffFromApi(), 10000);
+        }
+      };
+
+      const unsubClasses = onValue(
+        ref(db, 'classes'),
+        (snapshot: DataSnapshot) => this.handleClassesSnapshot(snapshot),
+        onSnapshotError,
+      );
+
+      const unsubInscriptions = onValue(
+        ref(db, 'inscriptions'),
+        (snapshot: DataSnapshot) => this.handleInscriptionsSnapshot(uid, snapshot),
+        onSnapshotError,
+      );
+
+      const unsubPublications = onValue(
+        ref(db, 'publications'),
+        (snapshot: DataSnapshot) => this.handlePublicationsSnapshot(snapshot),
+        onSnapshotError,
+      );
+
+      this.realtimeUnsubscribers.push(unsubClasses, unsubInscriptions, unsubPublications);
+    } catch {
+      if (!this.fallbackClassPollTimer) {
+        this.fallbackClassPollTimer = setInterval(() => void this.syncClassesDiffFromApi(), 10000);
+      }
+    }
+  }
+
+  private handleClassesSnapshot(snapshot: DataSnapshot): void {
+    const raw = (snapshot.val() ?? {}) as Record<string, Classe>;
+    this.latestClassesSnapshot = raw;
+    const current = this.classes();
+    const enrolledIds = new Set(Object.keys(this.membersByClass()));
+    const targetIds = enrolledIds.size > 0 ? enrolledIds : new Set(current.map((c) => c.id));
+    if (targetIds.size === 0) {
+      return;
+    }
+
+    const updated: Classe[] = [];
+    for (const id of targetIds) {
+      if (raw[id]) {
+        updated.push(raw[id]);
+      }
+    }
+
+    if (hasClassesDiff(current, updated)) {
+      this.classes.set(updated);
+    }
+  }
+
+  private handleInscriptionsSnapshot(uid: string, snapshot: DataSnapshot): void {
+    const raw = (snapshot.val() ?? {}) as Record<string, Inscription>;
+    const allInscriptions = Object.values(raw);
+    const myClassIds = new Set(
+      allInscriptions.filter((ins) => ins && ins.utilisateurId === uid).map((ins) => ins.classeId),
+    );
+
+    const nextMemberMap: Record<string, Inscription[]> = {};
+    for (const cid of myClassIds) {
+      nextMemberMap[cid] = allInscriptions.filter((ins) => ins && ins.classeId === cid);
+    }
+
+    const prevMap = this.membersByClass();
+    if (JSON.stringify(prevMap) !== JSON.stringify(nextMemberMap)) {
+      this.membersByClass.set(nextMemberMap);
+
+      if (this.latestClassesSnapshot) {
+        const nextClasses: Classe[] = [];
+        for (const cid of myClassIds) {
+          if (this.latestClassesSnapshot[cid]) {
+            nextClasses.push(this.latestClassesSnapshot[cid]);
+          }
+        }
+        if (hasClassesDiff(this.classes(), nextClasses)) {
+          this.classes.set(nextClasses);
+        }
+      } else {
+        void this.syncClassesDiffFromApi();
+      }
+    }
+  }
+
+  private handlePublicationsSnapshot(snapshot: DataSnapshot): void {
+    const raw = (snapshot.val() ?? {}) as Record<string, Publication>;
+    const myClassIds = new Set(this.classes().map((c) => c.id));
+    if (myClassIds.size === 0) return;
+
+    const nextPubs = Object.values(raw).filter((p) => p && myClassIds.has(p.classeId));
+    if (JSON.stringify(this.publications()) !== JSON.stringify(nextPubs)) {
+      this.publications.set(nextPubs);
+    }
+  }
+
+  private async syncClassesDiffFromApi(): Promise<void> {
+    try {
+      const latest = await this.api.getClasses();
+      if (hasClassesDiff(this.classes(), latest)) {
+        await this.refresh();
+      }
+    } catch {
+      /* keep current state */
+    }
+  }
+
   setRole(role: RoleClasse): void {
     this.viewRole.set(role);
   }
@@ -117,7 +287,9 @@ export class StoreService {
     this.error.set('');
     try {
       const classes = await this.api.getClasses();
-      this.classes.set(classes);
+      if (hasClassesDiff(this.classes(), classes) || this.classes().length === 0) {
+        this.classes.set(classes);
+      }
       const [pubs, membersEntries] = await Promise.all([
         Promise.all(classes.map((c) => this.api.getPublications(c.id).catch(() => [] as Publication[]))),
         Promise.all(

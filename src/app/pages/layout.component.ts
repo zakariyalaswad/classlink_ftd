@@ -15,11 +15,11 @@ import { IconComponent } from '../shared/icon.component';
   imports: [RouterOutlet, RouterLink, RouterLinkActive, AvatarComponent, IconComponent, DatePipe],
   template: `
     <div class="min-h-screen flex bg-[#f5f7fb] text-[#182033]">
-      <!-- LEFT SIDEBAR (Figma exact match) -->
-      <aside class="w-60 shrink-0 bg-white border-r border-slate-200/80 flex flex-col justify-between select-none">
-        <div>
+      <!-- LEFT SIDEBAR (Fixed full viewport height) -->
+      <aside class="fixed inset-y-0 left-0 z-30 w-60 h-screen bg-white border-r border-slate-200/80 flex flex-col justify-between select-none overflow-hidden">
+        <div class="flex-1 min-h-0 flex flex-col">
           <!-- ClassLink Logo -> redirects to Accueil (/home) -->
-          <div class="h-16 px-5 flex items-center">
+          <div class="h-16 px-5 flex items-center shrink-0">
             <a routerLink="/home" class="flex items-center gap-2.5 group focus:outline-none">
               <span class="w-8 h-8 rounded-lg bg-[#2454d6] text-white font-extrabold text-base flex items-center justify-center shadow-xs group-hover:bg-[#1d46b8] transition-colors">
                 C
@@ -29,7 +29,7 @@ import { IconComponent } from '../shared/icon.component';
           </div>
 
           <!-- Main Navigation -->
-          <nav class="px-3 mt-2 space-y-1">
+          <nav class="px-3 mt-2 space-y-1 shrink-0">
             <a
               routerLink="/home"
               routerLinkActive="bg-[#eef3ff] !text-[#2454d6] font-semibold"
@@ -48,30 +48,37 @@ import { IconComponent } from '../shared/icon.component';
             </a>
           </nav>
 
-          <!-- CLASSES Section -->
-          <div class="mt-6 px-3">
-            <div class="px-3 mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+          <!-- CLASSES Section (Internal scroll inside fixed sidebar) -->
+          <div class="mt-6 px-3 flex-1 min-h-0 flex flex-col">
+            <div class="px-3 mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
               CLASSES
             </div>
-            <div class="space-y-0.5 max-h-[calc(100vh-310px)] overflow-y-auto">
-              @for (c of store.roleClasses(); track c.id) {
-                <a
-                  [routerLink]="['/classes', c.id]"
-                  routerLinkActive="bg-[#eef3ff] !text-[#2454d6] font-semibold"
-                  class="flex items-center gap-3 rounded-xl px-3 py-2 text-[13.5px] font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-                >
-                  <span class="w-2.5 h-2.5 rounded-[3px] shrink-0" [class]="store.themeForClass(c.id).dotColor"></span>
-                  <span class="truncate">{{ c.nom }}</span>
-                </a>
-              } @empty {
-                <p class="px-3 py-2 text-xs text-slate-400">Aucune classe ({{ store.viewRole() === 'ENSEIGNANT' ? 'Enseignant' : 'Étudiant' }})</p>
+            <div class="space-y-0.5 flex-1 min-h-0 overflow-y-auto pr-1">
+              @if (store.loading() && store.classes().length === 0) {
+                <div class="px-3 py-2 flex items-center gap-2 text-xs text-slate-400">
+                  <app-icon name="spinner" [size]="14" />
+                  <span>Chargement...</span>
+                </div>
+              } @else {
+                @for (c of store.roleClasses(); track c.id) {
+                  <a
+                    [routerLink]="['/classes', c.id]"
+                    routerLinkActive="bg-[#eef3ff] !text-[#2454d6] font-semibold"
+                    class="flex items-center gap-3 rounded-xl px-3 py-2 text-[13.5px] font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                  >
+                    <span class="w-2.5 h-2.5 rounded-[3px] shrink-0" [class]="store.themeForClass(c.id).dotColor"></span>
+                    <span class="truncate">{{ c.nom }}</span>
+                  </a>
+                } @empty {
+                  <p class="px-3 py-2 text-xs text-slate-400">Aucune classe ({{ store.viewRole() === 'ENSEIGNANT' ? 'Enseignant' : 'Étudiant' }})</p>
+                }
               }
             </div>
           </div>
         </div>
 
-        <!-- Bottom Archived Courses Card (replaces Besoin d'aide ?) -->
-        <div class="p-3">
+        <!-- Bottom Archived Courses Card (pinned at bottom of fixed sidebar) -->
+        <div class="p-3 shrink-0">
           <a
             routerLink="/archived"
             routerLinkActive="!bg-[#eef3ff] border border-blue-200"
@@ -95,9 +102,9 @@ import { IconComponent } from '../shared/icon.component';
         </div>
       </aside>
 
-      <!-- MAIN COLUMN -->
-      <div class="flex-1 flex flex-col min-w-0">
-        <!-- TOP NAVBAR (Figma exact match) -->
+      <!-- MAIN COLUMN (offset by fixed w-60 sidebar) -->
+      <div class="flex-1 flex flex-col min-w-0 ml-60 min-h-screen">
+        <!-- TOP NAVBAR -->
         <header class="h-16 bg-white border-b border-slate-200/80 px-6 flex items-center justify-between sticky top-0 z-30">
           <!-- Breadcrumb: ClassLink > Current Page -->
           <div class="flex items-center gap-2 text-sm min-w-0">
@@ -108,15 +115,15 @@ import { IconComponent } from '../shared/icon.component';
 
           <!-- Right Controls: Role Switcher + Notifications + User Account -->
           <div class="flex items-center gap-4">
-            <!-- Role Switcher Pill (MODE DÉMO | Enseignant | Étudiant) -->
+            <!-- Role Switcher Pill -->
             <div class="bg-[#f1f4f9] rounded-xl p-1 flex items-center gap-1 border border-slate-200/60">
-
               <button
                 type="button"
                 (click)="store.setRole('ENSEIGNANT')"
+                [disabled]="store.viewRole() === 'ENSEIGNANT'"
                 [class]="
                   store.viewRole() === 'ENSEIGNANT'
-                    ? 'bg-white text-[#2454d6] font-bold shadow-xs rounded-lg px-3 py-1 text-xs transition-all'
+                    ? 'bg-white text-[#2454d6] font-bold shadow-xs rounded-lg px-3 py-1 text-xs transition-all cursor-default'
                     : 'text-slate-600 hover:text-[#182033] font-medium rounded-lg px-3 py-1 text-xs transition-all'
                 "
               >
@@ -125,9 +132,10 @@ import { IconComponent } from '../shared/icon.component';
               <button
                 type="button"
                 (click)="store.setRole('ETUDIANT')"
+                [disabled]="store.viewRole() === 'ETUDIANT'"
                 [class]="
                   store.viewRole() === 'ETUDIANT'
-                    ? 'bg-white text-[#2454d6] font-bold shadow-xs rounded-lg px-3 py-1 text-xs transition-all'
+                    ? 'bg-white text-[#2454d6] font-bold shadow-xs rounded-lg px-3 py-1 text-xs transition-all cursor-default'
                     : 'text-slate-600 hover:text-[#182033] font-medium rounded-lg px-3 py-1 text-xs transition-all'
                 "
               >
@@ -166,19 +174,23 @@ import { IconComponent } from '../shared/icon.component';
                     <button
                       type="button"
                       (click)="markAllRead()"
-                      [disabled]="store.unreadCount() === 0"
-                      class="text-xs font-semibold text-[#2454d6] hover:underline disabled:opacity-40"
+                      [disabled]="markingAllRead() || store.unreadCount() === 0"
+                      class="inline-flex items-center gap-1.5 text-xs font-semibold text-[#2454d6] hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      Tout marquer comme lu
+                      @if (markingAllRead()) {
+                        <app-icon name="spinner" [size]="12" />
+                      }
+                      <span>{{ markingAllRead() ? 'Traitement...' : 'Tout marquer comme lu' }}</span>
                     </button>
                   </div>
                   <div class="px-4 pt-2.5 pb-2 border-b border-slate-100 flex items-center gap-2">
                     <button
                       type="button"
                       (click)="notifTab.set('ALL')"
+                      [disabled]="notifTab() === 'ALL'"
                       [class]="
                         notifTab() === 'ALL'
-                          ? 'bg-[#eef3ff] text-[#2454d6] font-bold text-xs px-3 py-1 rounded-lg'
+                          ? 'bg-[#eef3ff] text-[#2454d6] font-bold text-xs px-3 py-1 rounded-lg cursor-default'
                           : 'text-slate-500 hover:text-slate-800 font-medium text-xs px-3 py-1 rounded-lg'
                       "
                     >
@@ -187,9 +199,10 @@ import { IconComponent } from '../shared/icon.component';
                     <button
                       type="button"
                       (click)="notifTab.set('UNREAD')"
+                      [disabled]="notifTab() === 'UNREAD'"
                       [class]="
                         notifTab() === 'UNREAD'
-                          ? 'bg-[#eef3ff] text-[#2454d6] font-bold text-xs px-3 py-1 rounded-lg'
+                          ? 'bg-[#eef3ff] text-[#2454d6] font-bold text-xs px-3 py-1 rounded-lg cursor-default'
                           : 'text-slate-500 hover:text-slate-800 font-medium text-xs px-3 py-1 rounded-lg'
                       "
                     >
@@ -201,13 +214,20 @@ import { IconComponent } from '../shared/icon.component';
                       <button
                         type="button"
                         (click)="openNotification(n)"
-                        class="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors flex items-start gap-3"
+                        [disabled]="openingNotifId() !== null"
+                        class="w-full text-left px-4 py-3 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors flex items-start gap-3"
                         [class.bg-[#f6f9ff]]="!n.dateLecture"
                       >
-                        <span
-                          class="w-2 h-2 rounded-full mt-1.5 shrink-0"
-                          [class]="!n.dateLecture ? 'bg-[#2454d6]' : 'bg-transparent'"
-                        ></span>
+                        @if (openingNotifId() === n.id) {
+                          <span class="mt-1 shrink-0 text-[#2454d6]">
+                            <app-icon name="spinner" [size]="13" />
+                          </span>
+                        } @else {
+                          <span
+                            class="w-2 h-2 rounded-full mt-1.5 shrink-0"
+                            [class]="!n.dateLecture ? 'bg-[#2454d6]' : 'bg-transparent'"
+                          ></span>
+                        }
                         <div class="min-w-0 flex-1">
                           <p class="text-xs font-bold text-[#182033]">{{ n.titre }}</p>
                           @if (n.nomClasse) {
@@ -262,10 +282,14 @@ import { IconComponent } from '../shared/icon.component';
                   </a>
                   <button
                     type="button"
-                    (click)="accountOpen.set(false); auth.logout()"
-                    class="w-full text-left flex items-center gap-2 px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                    (click)="logout()"
+                    [disabled]="loggingOut()"
+                    class="w-full text-left flex items-center gap-2 px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Déconnexion
+                    @if (loggingOut()) {
+                      <app-icon name="spinner" [size]="14" />
+                    }
+                    <span>{{ loggingOut() ? 'Déconnexion...' : 'Déconnexion' }}</span>
                   </button>
                 </div>
               }
@@ -293,6 +317,9 @@ export class LayoutComponent {
   readonly notifOpen = signal(false);
   readonly notifTab = signal<'ALL' | 'UNREAD'>('ALL');
   readonly accountOpen = signal(false);
+  readonly markingAllRead = signal(false);
+  readonly openingNotifId = signal<string | null>(null);
+  readonly loggingOut = signal(false);
 
   private readonly currentUrl = toSignal(
     this.router.events.pipe(
@@ -326,20 +353,43 @@ export class LayoutComponent {
   }
 
   async openNotification(n: AppNotification): Promise<void> {
-    this.notifOpen.set(false);
-    if (!n.dateLecture) {
-      await this.api.markRead(n.id).catch(() => undefined);
-      await this.store.refreshNotifications();
-    }
-    if (n.lienCible) {
-      await this.router.navigateByUrl(n.lienCible);
-    } else if (n.classeId) {
-      await this.router.navigate(['/classes', n.classeId]);
+    if (this.openingNotifId()) return;
+    this.openingNotifId.set(n.id);
+    try {
+      if (!n.dateLecture) {
+        await this.api.markRead(n.id).catch(() => undefined);
+        await this.store.refreshNotifications();
+      }
+      this.notifOpen.set(false);
+      if (n.lienCible) {
+        await this.router.navigateByUrl(n.lienCible);
+      } else if (n.classeId) {
+        await this.router.navigate(['/classes', n.classeId]);
+      }
+    } finally {
+      this.openingNotifId.set(null);
     }
   }
 
   async markAllRead(): Promise<void> {
-    await this.api.markAllRead().catch(() => undefined);
-    await this.store.refreshNotifications();
+    if (this.markingAllRead()) return;
+    this.markingAllRead.set(true);
+    try {
+      await this.api.markAllRead().catch(() => undefined);
+      await this.store.refreshNotifications();
+    } finally {
+      this.markingAllRead.set(false);
+    }
+  }
+
+  async logout(): Promise<void> {
+    if (this.loggingOut()) return;
+    this.loggingOut.set(true);
+    try {
+      this.accountOpen.set(false);
+      await this.auth.logout();
+    } finally {
+      this.loggingOut.set(false);
+    }
   }
 }

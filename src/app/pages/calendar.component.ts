@@ -20,9 +20,9 @@ import { StoreService } from '../core/store.service';
     </div>
     <div class="grid grid-cols-7 gap-1">
       @for (c of cells(); track $index) {
-        <button (click)="selected.set(c.key)" [disabled]="!c.day"
-          class="min-h-16 rounded-xl border text-left p-1.5 text-xs"
-          [class]="c.key === selected() ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'">
+        <button (click)="selected.set(c.key)" [disabled]="!c.day || c.key === selected()"
+          class="min-h-16 rounded-xl border text-left p-1.5 text-xs transition-colors"
+          [class]="c.key === selected() ? 'border-blue-500 bg-blue-50 cursor-default' : 'border-slate-200 bg-white hover:bg-slate-50'">
           <span [class]="c.today ? 'bg-blue-600 text-white rounded-full px-1.5' : ''">{{ c.day || '' }}</span>
           @if (c.count) { <span class="block mt-1 text-[10px] font-bold text-orange-700">{{ c.count }} devoir(s)</span> }
         </button>

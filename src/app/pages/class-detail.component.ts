@@ -59,14 +59,18 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
           <button
             type="button"
             (click)="selectTab(t.id)"
-            class="pb-3 text-sm whitespace-nowrap border-b-2 transition-colors"
+            [disabled]="activeTab() === t.id"
+            class="pb-3 text-sm whitespace-nowrap border-b-2 transition-colors inline-flex items-center gap-1.5"
             [class]="
               activeTab() === t.id
-                ? 'border-[#2454d6] text-[#2454d6] font-bold'
+                ? 'border-[#2454d6] text-[#2454d6] font-bold cursor-default'
                 : 'border-transparent text-slate-500 hover:text-[#182033] font-medium'
             "
           >
-            {{ t.label }}
+            <span>{{ t.label }}</span>
+            @if ((t.id === 'GRADES' || t.id === 'WORK') && loadingGrades() && activeTab() === t.id) {
+              <app-icon name="spinner" [size]="13" />
+            }
           </button>
         }
       </div>
@@ -89,7 +93,8 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
                   <button
                     type="button"
                     (click)="copyCode(c.codeAcces)"
-                    class="w-8 h-8 rounded-lg bg-[#eef3ff] text-[#2454d6] hover:bg-blue-100 flex items-center justify-center transition-colors"
+                    [disabled]="copied()"
+                    class="w-8 h-8 rounded-lg bg-[#eef3ff] text-[#2454d6] hover:bg-blue-100 disabled:opacity-70 disabled:cursor-default flex items-center justify-center transition-colors"
                     title="Copier le code"
                   >
                     <app-icon [name]="copied() ? 'check' : 'copy'" [size]="15" />
@@ -190,24 +195,39 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
                       </div>
                     }
                     <div class="flex items-center justify-between gap-2">
-                      <label class="btn-light !text-xs cursor-pointer gap-1.5">
-                        <app-icon name="file" [size]="14" />
+                      <label
+                        class="btn-light !text-xs gap-1.5"
+                        [class.opacity-60]="uploadingPublicationFile() || publishing()"
+                        [class.cursor-not-allowed]="uploadingPublicationFile() || publishing()"
+                        [class.cursor-pointer]="!uploadingPublicationFile() && !publishing()"
+                      >
+                        <app-icon [name]="uploadingPublicationFile() ? 'spinner' : 'file'" [size]="14" />
                         {{ uploadingPublicationFile() ? 'Préparation du fichier...' : 'Joindre un fichier' }}
                         <input
                           type="file"
                           class="hidden"
-                          [disabled]="uploadingPublicationFile()"
+                          [disabled]="uploadingPublicationFile() || publishing()"
                           (change)="onPublicationFileSelected($event)"
                         />
                       </label>
                       <div class="flex gap-2">
-                        <button type="button" (click)="composerExpanded.set(false)" class="btn-light !text-xs">Annuler</button>
+                        <button
+                          type="button"
+                          (click)="composerExpanded.set(false)"
+                          [disabled]="publishing() || uploadingPublicationFile()"
+                          class="btn-light !text-xs"
+                        >
+                          Annuler
+                        </button>
                         <button
                           type="submit"
                           class="btn !text-xs"
-                          [disabled]="uploadingPublicationFile() || !titre.trim()"
+                          [disabled]="publishing() || uploadingPublicationFile() || !titre.trim()"
                         >
-                          Publier
+                          @if (publishing()) {
+                            <app-icon name="spinner" [size]="14" />
+                          }
+                          <span>{{ publishing() ? 'Publication...' : 'Publier' }}</span>
                         </button>
                       </div>
                     </div>
@@ -241,9 +261,10 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
             <button
               type="button"
               (click)="workFilter.set('ALL')"
+              [disabled]="workFilter() === 'ALL'"
               [class]="
                 workFilter() === 'ALL'
-                  ? 'bg-white text-[#182033] font-bold shadow-2xs rounded-lg px-3.5 py-1.5 text-xs'
+                  ? 'bg-white text-[#182033] font-bold shadow-2xs rounded-lg px-3.5 py-1.5 text-xs cursor-default'
                   : 'text-slate-600 hover:text-[#182033] font-medium rounded-lg px-3.5 py-1.5 text-xs'
               "
             >
@@ -252,9 +273,10 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
             <button
               type="button"
               (click)="workFilter.set('COURS')"
+              [disabled]="workFilter() === 'COURS'"
               [class]="
                 workFilter() === 'COURS'
-                  ? 'bg-white text-[#182033] font-bold shadow-2xs rounded-lg px-3.5 py-1.5 text-xs'
+                  ? 'bg-white text-[#182033] font-bold shadow-2xs rounded-lg px-3.5 py-1.5 text-xs cursor-default'
                   : 'text-slate-600 hover:text-[#182033] font-medium rounded-lg px-3.5 py-1.5 text-xs'
               "
             >
@@ -263,9 +285,10 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
             <button
               type="button"
               (click)="workFilter.set('DEVOIR')"
+              [disabled]="workFilter() === 'DEVOIR'"
               [class]="
                 workFilter() === 'DEVOIR'
-                  ? 'bg-white text-[#182033] font-bold shadow-2xs rounded-lg px-3.5 py-1.5 text-xs'
+                  ? 'bg-white text-[#182033] font-bold shadow-2xs rounded-lg px-3.5 py-1.5 text-xs cursor-default'
                   : 'text-slate-600 hover:text-[#182033] font-medium rounded-lg px-3.5 py-1.5 text-xs'
               "
             >
@@ -538,18 +561,26 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
 
       <!-- Modal: Créer un Cours / Devoir (from Travaux et devoirs) -->
       @if (createWorkModalOpen()) {
-        <div class="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4" (click)="createWorkModalOpen.set(false)">
+        <div
+          class="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4"
+          (click)="!publishing() && createWorkModalOpen.set(false)"
+        >
           <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl" (click)="$event.stopPropagation()">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-lg font-extrabold text-[#182033]">Créer un contenu</h3>
-              <button type="button" (click)="createWorkModalOpen.set(false)" class="text-slate-400 hover:text-slate-600">
+              <button
+                type="button"
+                (click)="createWorkModalOpen.set(false)"
+                [disabled]="publishing() || uploadingPublicationFile()"
+                class="text-slate-400 hover:text-slate-600 disabled:opacity-40"
+              >
                 <app-icon name="close" [size]="18" />
               </button>
             </div>
             <form (ngSubmit)="publish()" class="space-y-3">
               <div>
                 <label class="block text-xs font-bold text-slate-700 mb-1">Type</label>
-                <select name="wtype" [(ngModel)]="type" class="input !text-xs">
+                <select name="wtype" [(ngModel)]="type" [disabled]="publishing()" class="input !text-xs">
                   <option value="DEVOIR">Devoir</option>
                   <option value="COURS">Cours</option>
                   <option value="ANNONCE">Annonce</option>
@@ -557,21 +588,21 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
               </div>
               <div>
                 <label class="block text-xs font-bold text-slate-700 mb-1">Titre *</label>
-                <input name="wtitre" [(ngModel)]="titre" placeholder="Ex: Créer une API REST avec Spring Boot" class="input !text-xs" required />
+                <input name="wtitre" [(ngModel)]="titre" [disabled]="publishing()" placeholder="Ex: Créer une API REST avec Spring Boot" class="input !text-xs" required />
               </div>
               <div>
                 <label class="block text-xs font-bold text-slate-700 mb-1">Instructions / Contenu</label>
-                <textarea name="wcontenu" [(ngModel)]="contenu" rows="3" class="input !text-xs" placeholder="Détails du cours ou devoir..."></textarea>
+                <textarea name="wcontenu" [(ngModel)]="contenu" [disabled]="publishing()" rows="3" class="input !text-xs" placeholder="Détails du cours ou devoir..."></textarea>
               </div>
               @if (type === 'DEVOIR') {
                 <div class="grid grid-cols-2 gap-2">
                   <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">Date limite</label>
-                    <input name="wlimite" type="datetime-local" [(ngModel)]="dateLimite" class="input !text-xs" />
+                    <input name="wlimite" type="datetime-local" [(ngModel)]="dateLimite" [disabled]="publishing()" class="input !text-xs" />
                   </div>
                   <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">Points / Barème</label>
-                    <input name="wbareme" type="number" [(ngModel)]="bareme" placeholder="20" class="input !text-xs" />
+                    <input name="wbareme" type="number" [(ngModel)]="bareme" [disabled]="publishing()" placeholder="20" class="input !text-xs" />
                   </div>
                 </div>
               }
@@ -582,31 +613,51 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
                     <span class="text-[#2454d6]"><app-icon name="file" [size]="14" /></span>
                     <span class="font-bold text-[#182033]">{{ att.name }}</span>
                     <span class="text-[11px] text-slate-500">({{ att.sizeLabel }})</span>
-                    <button type="button" (click)="composerAttachment.set(null)" class="text-slate-400 hover:text-red-600">
+                    <button
+                      type="button"
+                      (click)="composerAttachment.set(null)"
+                      [disabled]="publishing()"
+                      class="text-slate-400 hover:text-red-600 disabled:opacity-40"
+                    >
                       <app-icon name="close" [size]="14" />
                     </button>
                   </div>
                 } @else {
-                  <label class="btn-light !text-xs cursor-pointer gap-1.5 w-full">
-                    <app-icon name="file" [size]="14" />
+                  <label
+                    class="btn-light !text-xs gap-1.5 w-full"
+                    [class.opacity-60]="uploadingPublicationFile() || publishing()"
+                    [class.cursor-not-allowed]="uploadingPublicationFile() || publishing()"
+                    [class.cursor-pointer]="!uploadingPublicationFile() && !publishing()"
+                  >
+                    <app-icon [name]="uploadingPublicationFile() ? 'spinner' : 'file'" [size]="14" />
                     {{ uploadingPublicationFile() ? 'Préparation du fichier...' : 'Choisir un fichier à joindre' }}
                     <input
                       type="file"
                       class="hidden"
-                      [disabled]="uploadingPublicationFile()"
+                      [disabled]="uploadingPublicationFile() || publishing()"
                       (change)="onPublicationFileSelected($event)"
                     />
                   </label>
                 }
               </div>
               <div class="flex justify-end gap-2 pt-2">
-                <button type="button" (click)="createWorkModalOpen.set(false)" class="btn-light !text-xs">Annuler</button>
+                <button
+                  type="button"
+                  (click)="createWorkModalOpen.set(false)"
+                  [disabled]="publishing() || uploadingPublicationFile()"
+                  class="btn-light !text-xs"
+                >
+                  Annuler
+                </button>
                 <button
                   type="submit"
                   class="btn !text-xs"
-                  [disabled]="uploadingPublicationFile() || !titre.trim()"
+                  [disabled]="publishing() || uploadingPublicationFile() || !titre.trim()"
                 >
-                  Publier
+                  @if (publishing()) {
+                    <app-icon name="spinner" [size]="14" />
+                  }
+                  <span>{{ publishing() ? 'Publication...' : 'Publier' }}</span>
                 </button>
               </div>
             </form>
@@ -616,11 +667,24 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
 
       <!-- Modal: Paramètres de la classe (Teacher Gear button on banner) -->
       @if (settingsModalOpen()) {
-        <div class="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4" (click)="settingsModalOpen.set(false)">
+        <div
+          class="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4"
+          (click)="!updatingSettings() && !regeneratingCode() && !archivingClass() && settingsModalOpen.set(false)"
+        >
           <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4" (click)="$event.stopPropagation()">
             <div class="flex items-center justify-between">
-              <h3 class="text-lg font-extrabold text-[#182033]">Paramètres de la classe</h3>
-              <button type="button" (click)="settingsModalOpen.set(false)" class="text-slate-400 hover:text-slate-600">
+              <div class="flex items-center gap-2">
+                <h3 class="text-lg font-extrabold text-[#182033]">Paramètres de la classe</h3>
+                @if (updatingSettings()) {
+                  <span class="text-[#2454d6] inline-flex items-center"><app-icon name="spinner" [size]="15" /></span>
+                }
+              </div>
+              <button
+                type="button"
+                (click)="settingsModalOpen.set(false)"
+                [disabled]="updatingSettings() || regeneratingCode() || archivingClass()"
+                class="text-slate-400 hover:text-slate-600 disabled:opacity-40"
+              >
                 <app-icon name="close" [size]="18" />
               </button>
             </div>
@@ -629,6 +693,7 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
                 <span class="font-semibold text-slate-700">Publication d'annonces</span>
                 <select
                   class="input !w-auto !text-xs"
+                  [disabled]="updatingSettings() || regeneratingCode() || archivingClass()"
                   [ngModel]="c.parametres.publicationAnnonces"
                   (ngModelChange)="setting({ publicationAnnonces: $event })"
                 >
@@ -640,6 +705,7 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
                 <span class="font-semibold text-slate-700">Commentaires</span>
                 <select
                   class="input !w-auto !text-xs"
+                  [disabled]="updatingSettings() || regeneratingCode() || archivingClass()"
                   [ngModel]="c.parametres.commentaires"
                   (ngModelChange)="setting({ commentaires: $event })"
                 >
@@ -651,20 +717,44 @@ type WorkFilter = 'ALL' | 'COURS' | 'DEVOIR';
                 <span class="font-semibold text-slate-700">Code d'accès actif</span>
                 <input
                   type="checkbox"
+                  [disabled]="updatingSettings() || regeneratingCode() || archivingClass()"
                   [ngModel]="c.parametres.codeAccesActif"
                   (ngModelChange)="setting({ codeAccesActif: $event })"
                 />
               </label>
               <div class="pt-2 flex gap-2">
-                <button type="button" class="btn-light flex-1 !text-xs" (click)="regen()">Régénérer le code</button>
-                <button type="button" class="btn-light flex-1 !text-xs" (click)="archive(!c.archivee)">
-                  {{ c.archivee ? 'Désarchiver' : 'Archiver la classe' }}
+                <button
+                  type="button"
+                  class="btn-light flex-1 !text-xs"
+                  [disabled]="regeneratingCode() || archivingClass() || updatingSettings()"
+                  (click)="regen()"
+                >
+                  @if (regeneratingCode()) {
+                    <app-icon name="spinner" [size]="14" />
+                  }
+                  <span>{{ regeneratingCode() ? 'Régénération...' : 'Régénérer le code' }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn-light flex-1 !text-xs"
+                  [disabled]="archivingClass() || regeneratingCode() || updatingSettings()"
+                  (click)="archive(!c.archivee)"
+                >
+                  @if (archivingClass()) {
+                    <app-icon name="spinner" [size]="14" />
+                  }
+                  <span>{{ archivingClass() ? 'Traitement...' : (c.archivee ? 'Désarchiver' : 'Archiver la classe') }}</span>
                 </button>
               </div>
             </div>
           </div>
         </div>
       }
+    } @else if (loadingClass()) {
+      <div class="bg-white rounded-2xl border border-slate-200/80 p-10 flex items-center justify-center gap-2.5 text-sm font-semibold text-slate-500">
+        <app-icon name="spinner" [size]="20" />
+        <span>Chargement de la classe...</span>
+      </div>
     } @else if (error()) {
       <p class="text-sm text-red-600 mt-4">{{ error() }}</p>
     }
@@ -700,6 +790,12 @@ export class ClassDetailComponent {
   composerExpanded = signal(false);
   composerAttachment = signal<StoredFileAttachment | null>(null);
   uploadingPublicationFile = signal(false);
+  publishing = signal(false);
+  loadingClass = signal(false);
+  loadingGrades = signal(false);
+  updatingSettings = signal(false);
+  regeneratingCode = signal(false);
+  archivingClass = signal(false);
   createWorkModalOpen = signal(false);
   settingsModalOpen = signal(false);
   classNotifEnabled = signal(true);
@@ -768,6 +864,31 @@ export class ClassDetailComponent {
     effect(() => {
       void this.load(this.id());
     });
+    // Sync live class, member, and publication changes delivered via StoreService's Firebase snapshot listener
+    effect(() => {
+      const cid = this.id();
+      const liveClass = this.store.classes().find((c) => c.id === cid);
+      if (liveClass && this.classe()) {
+        if (JSON.stringify(this.classe()) !== JSON.stringify(liveClass)) {
+          this.classe.set(liveClass);
+          this.canAnnounce.set(
+            !liveClass.archivee &&
+              (this.isTeacherView() || liveClass.parametres?.publicationAnnonces === 'TOUS_LES_MEMBRES'),
+          );
+        }
+      }
+      const liveMembers = this.store.membersByClass()[cid];
+      if (liveMembers && this.members().length > 0 && JSON.stringify(this.members()) !== JSON.stringify(liveMembers)) {
+        this.members.set(liveMembers);
+      }
+      const livePubs = this.store
+        .publications()
+        .filter((p) => p.classeId === cid)
+        .sort((x, y) => y.datePublication.localeCompare(x.datePublication));
+      if (livePubs.length > 0 && JSON.stringify(this.publications()) !== JSON.stringify(livePubs)) {
+        this.publications.set(livePubs);
+      }
+    });
   }
 
   selectTab(tab: ClassTab): void {
@@ -798,6 +919,7 @@ export class ClassDetailComponent {
 
   private async load(id: string): Promise<void> {
     this.error.set('');
+    this.loadingClass.set(true);
     try {
       const [c, m, p, a] = await Promise.all([
         this.api.getClass(id),
@@ -812,27 +934,34 @@ export class ClassDetailComponent {
       void this.loadGradesData();
     } catch (e) {
       this.error.set((e as Error).message);
+    } finally {
+      this.loadingClass.set(false);
     }
   }
 
   private async loadGradesData(): Promise<void> {
     const devoirs = this.assignments();
     if (!devoirs.length) return;
+    this.loadingGrades.set(true);
     const allMap: Record<string, Remise[]> = {};
     const myMap: Record<string, Remise | null> = {};
 
-    await Promise.all(
-      devoirs.map(async (d) => {
-        const [subs, mine] = await Promise.all([
-          this.api.getSubmissions(d.id).catch(() => [] as Remise[]),
-          this.api.getMySubmission(d.id).catch(() => null),
-        ]);
-        allMap[d.id] = subs;
-        myMap[d.id] = mine;
-      }),
-    );
-    this.allSubmissionsByDevoir.set(allMap);
-    this.mySubmissionsByDevoir.set(myMap);
+    try {
+      await Promise.all(
+        devoirs.map(async (d) => {
+          const [subs, mine] = await Promise.all([
+            this.api.getSubmissions(d.id).catch(() => [] as Remise[]),
+            this.api.getMySubmission(d.id).catch(() => null),
+          ]);
+          allMap[d.id] = subs;
+          myMap[d.id] = mine;
+        }),
+      );
+      this.allSubmissionsByDevoir.set(allMap);
+      this.mySubmissionsByDevoir.set(myMap);
+    } finally {
+      this.loadingGrades.set(false);
+    }
   }
 
   gradeForStudent(devoirId: string, studentUid: string): Remise | undefined {
@@ -858,6 +987,8 @@ export class ClassDetailComponent {
   }
 
   async publish(): Promise<void> {
+    if (this.publishing() || this.uploadingPublicationFile() || !this.titre.trim()) return;
+    this.publishing.set(true);
     try {
       const att = this.composerAttachment();
       let body = this.contenu.trim();
@@ -888,32 +1019,48 @@ export class ClassDetailComponent {
       void this.store.refresh();
     } catch (e) {
       this.error.set((e as Error).message);
+    } finally {
+      this.publishing.set(false);
     }
   }
 
   async setting(s: Record<string, unknown>): Promise<void> {
+    if (this.updatingSettings()) return;
+    this.updatingSettings.set(true);
     try {
       this.classe.set(await this.api.updateSettings(this.id(), s));
+      void this.store.refresh();
     } catch (e) {
       this.error.set((e as Error).message);
+    } finally {
+      this.updatingSettings.set(false);
     }
   }
 
   async regen(): Promise<void> {
+    if (this.regeneratingCode()) return;
+    this.regeneratingCode.set(true);
     try {
       const r = await this.api.regenerateCode(this.id());
       this.classe.update((c) => (c ? { ...c, codeAcces: r.codeAcces } : c));
+      void this.store.refresh();
     } catch (e) {
       this.error.set((e as Error).message);
+    } finally {
+      this.regeneratingCode.set(false);
     }
   }
 
   async archive(v: boolean): Promise<void> {
+    if (this.archivingClass()) return;
+    this.archivingClass.set(true);
     try {
       this.classe.set(await this.api.archive(this.id(), v));
       void this.store.refresh();
     } catch (e) {
       this.error.set((e as Error).message);
+    } finally {
+      this.archivingClass.set(false);
     }
   }
 }

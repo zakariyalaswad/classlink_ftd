@@ -65,10 +65,11 @@ interface PreviewModalData {
         <button
           type="button"
           (click)="toggleDetails()"
-          class="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+          [disabled]="loadingSubmissions()"
+          class="text-slate-400 hover:text-slate-600 disabled:opacity-50 p-1 rounded-lg"
           title="Options / Détails"
         >
-          <app-icon name="more" [size]="18" />
+          <app-icon [name]="loadingSubmissions() ? 'spinner' : 'more'" [size]="18" />
         </button>
       </div>
 
@@ -89,14 +90,15 @@ interface PreviewModalData {
             <button
               type="button"
               (click)="openFileViewer(att, 'pub_' + pub().id)"
-              class="inline-flex items-center gap-3 rounded-xl border border-slate-200/90 bg-white hover:bg-[#f6f9ff] hover:border-blue-300 px-3.5 py-2.5 transition-all max-w-md w-full sm:w-80 shadow-2xs text-left group"
+              [disabled]="openingFileKey() !== null"
+              class="inline-flex items-center gap-3 rounded-xl border border-slate-200/90 bg-white hover:bg-[#f6f9ff] hover:border-blue-300 disabled:opacity-60 disabled:cursor-not-allowed px-3.5 py-2.5 transition-all max-w-md w-full sm:w-80 shadow-2xs text-left group"
             >
               <span class="w-9 h-9 rounded-lg bg-[#eef3ff] text-[#2454d6] flex items-center justify-center shrink-0">
-                <app-icon name="file" [size]="18" />
+                <app-icon [name]="openingFileKey() === 'pub_' + pub().id + '_' + att.name ? 'spinner' : 'file'" [size]="18" />
               </span>
               <div class="min-w-0 flex-1">
                 <p class="text-xs font-bold text-[#182033] group-hover:text-[#2454d6] truncate">{{ att.name }}</p>
-                <p class="text-[11px] text-slate-400">{{ att.typeLabel }} · {{ att.sizeLabel }} · <span class="text-[#2454d6] font-semibold">Ouvrir</span></p>
+                <p class="text-[11px] text-slate-400">{{ att.typeLabel }} · {{ att.sizeLabel }} · <span class="text-[#2454d6] font-semibold">{{ openingFileKey() === 'pub_' + pub().id + '_' + att.name ? 'Ouverture...' : 'Ouvrir' }}</span></p>
               </div>
             </button>
           }
@@ -123,9 +125,13 @@ interface PreviewModalData {
           <button
             type="button"
             (click)="toggleDetails()"
-            class="text-xs font-bold text-[#2454d6] hover:underline"
+            [disabled]="loadingSubmissions()"
+            class="inline-flex items-center gap-1.5 text-xs font-bold text-[#2454d6] hover:underline disabled:opacity-50"
           >
-            {{ isTeacher() ? 'Voir les remises des étudiants' : 'Remettre un fichier / Voir ma remise' }}
+            @if (loadingSubmissions()) {
+              <app-icon name="spinner" [size]="13" />
+            }
+            <span>{{ isTeacher() ? 'Voir les remises des étudiants' : 'Remettre un fichier / Voir ma remise' }}</span>
           </button>
         </div>
       }
@@ -133,7 +139,12 @@ interface PreviewModalData {
       <!-- Assignment Submission / Grading Drawer -->
       @if (detailsOpen() && pub().type === 'DEVOIR') {
         <div class="mt-4 pt-4 border-t border-slate-100">
-          @if (isTeacher()) {
+          @if (loadingSubmissions()) {
+            <div class="py-4 flex items-center gap-2 text-xs text-slate-500">
+              <app-icon name="spinner" [size]="15" />
+              <span>Chargement des remises...</span>
+            </div>
+          } @else if (isTeacher()) {
             <h4 class="font-bold text-xs uppercase tracking-wider text-slate-500 mb-3">
               Remises des étudiants ({{ submissions().length }})
             </h4>
@@ -150,9 +161,12 @@ interface PreviewModalData {
                   <button
                     type="button"
                     (click)="openFileViewer(att, 'sub_' + pub().id)"
-                    class="inline-flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white hover:border-blue-300 px-3 py-1.5 mb-2 text-xs hover:bg-blue-50/40 transition-colors"
+                    [disabled]="openingFileKey() !== null"
+                    class="inline-flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white hover:border-blue-300 disabled:opacity-60 disabled:cursor-not-allowed px-3 py-1.5 mb-2 text-xs hover:bg-blue-50/40 transition-colors"
                   >
-                    <span class="text-[#2454d6]"><app-icon name="file" [size]="15" /></span>
+                    <span class="text-[#2454d6]">
+                      <app-icon [name]="openingFileKey() === 'sub_' + pub().id + '_' + att.name ? 'spinner' : 'file'" [size]="15" />
+                    </span>
                     <span class="font-bold text-[#182033]">{{ att.name }}</span>
                     <span class="text-slate-400 text-[11px]">({{ att.sizeLabel }})</span>
                     <span class="text-[#2454d6] font-bold text-[11px]">Lire</span>
@@ -163,16 +177,27 @@ interface PreviewModalData {
                     [name]="'n' + r.id"
                     type="number"
                     [(ngModel)]="grades[r.id]"
+                    [disabled]="gradingId() === r.id"
                     placeholder="Note"
                     class="input !w-24 !py-1.5 !text-xs"
                   />
                   <input
                     [name]="'c' + r.id"
                     [(ngModel)]="corrections[r.id]"
+                    [disabled]="gradingId() === r.id"
                     placeholder="Commentaire de correction"
                     class="input flex-1 min-w-40 !py-1.5 !text-xs"
                   />
-                  <button class="btn !py-1.5 !px-3 !text-xs">Noter</button>
+                  <button
+                    type="submit"
+                    [disabled]="gradingId() !== null || grades[r.id] == null"
+                    class="btn !py-1.5 !px-3 !text-xs"
+                  >
+                    @if (gradingId() === r.id) {
+                      <app-icon name="spinner" [size]="13" />
+                    }
+                    <span>{{ gradingId() === r.id ? 'Notation...' : 'Noter' }}</span>
+                  </button>
                 </form>
                 @if (r.note != null) {
                   <p class="text-[11px] text-emerald-700 font-semibold mt-1.5">
@@ -194,9 +219,12 @@ interface PreviewModalData {
                   <button
                     type="button"
                     (click)="openFileViewer(att, 'sub_' + pub().id)"
-                    class="inline-flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white hover:border-blue-300 px-3 py-2 text-xs hover:bg-blue-50/40 transition-colors"
+                    [disabled]="openingFileKey() !== null"
+                    class="inline-flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white hover:border-blue-300 disabled:opacity-60 disabled:cursor-not-allowed px-3 py-2 text-xs hover:bg-blue-50/40 transition-colors"
                   >
-                    <span class="text-[#2454d6]"><app-icon name="file" [size]="16" /></span>
+                    <span class="text-[#2454d6]">
+                      <app-icon [name]="openingFileKey() === 'sub_' + pub().id + '_' + att.name ? 'spinner' : 'file'" [size]="16" />
+                    </span>
                     <span class="font-bold text-[#182033]">{{ att.name }}</span>
                     <span class="text-slate-400 text-[11px]">({{ att.sizeLabel }})</span>
                     <span class="text-[#2454d6] font-bold text-[11px]">Lire</span>
@@ -218,6 +246,7 @@ interface PreviewModalData {
               <textarea
                 name="t"
                 [(ngModel)]="texte"
+                [disabled]="submitting()"
                 rows="2"
                 class="input !text-xs"
                 [placeholder]="mine() ? 'Modifier votre commentaire ou fichier...' : 'Saisissez votre réponse ou joignez un fichier...'"
@@ -232,7 +261,8 @@ interface PreviewModalData {
                   <button
                     type="button"
                     (click)="submissionAttachment.set(null)"
-                    class="text-slate-400 hover:text-red-600"
+                    [disabled]="submitting()"
+                    class="text-slate-400 hover:text-red-600 disabled:opacity-40"
                   >
                     <app-icon name="close" [size]="14" />
                   </button>
@@ -240,22 +270,30 @@ interface PreviewModalData {
               }
 
               <div class="flex flex-wrap items-center gap-2">
-                <label class="btn-light !py-1.5 !px-3 !text-xs cursor-pointer gap-1.5">
-                  <app-icon name="file" [size]="14" />
+                <label
+                  class="btn-light !py-1.5 !px-3 !text-xs gap-1.5"
+                  [class.opacity-60]="uploadingFile() || submitting()"
+                  [class.cursor-not-allowed]="uploadingFile() || submitting()"
+                  [class.cursor-pointer]="!uploadingFile() && !submitting()"
+                >
+                  <app-icon [name]="uploadingFile() ? 'spinner' : 'file'" [size]="14" />
                   {{ uploadingFile() ? 'Préparation du fichier...' : 'Joindre un fichier (PDF, ZIP, image...)' }}
                   <input
                     type="file"
                     class="hidden"
-                    [disabled]="uploadingFile()"
+                    [disabled]="uploadingFile() || submitting()"
                     (change)="onSubmissionFileSelected($event)"
                   />
                 </label>
                 <button
                   type="submit"
                   class="btn !py-1.5 !px-3 !text-xs"
-                  [disabled]="uploadingFile() || (!texte.trim() && !submissionAttachment())"
+                  [disabled]="submitting() || uploadingFile() || (!texte.trim() && !submissionAttachment())"
                 >
-                  {{ mine() ? 'Mettre à jour la remise' : 'Remettre le devoir' }}
+                  @if (submitting()) {
+                    <app-icon name="spinner" [size]="13" />
+                  }
+                  <span>{{ submitting() ? 'Envoi...' : (mine() ? 'Mettre à jour la remise' : 'Remettre le devoir') }}</span>
                 </button>
               </div>
             </form>
@@ -289,17 +327,18 @@ interface PreviewModalData {
               <input
                 name="cm"
                 [(ngModel)]="newComment"
+                [disabled]="sendingComment()"
                 placeholder="Ajouter un commentaire..."
                 class="w-full rounded-full border border-slate-200 bg-[#f9fafc] px-4 py-2 text-xs placeholder:text-slate-400 focus:bg-white focus:border-[#2454d6]"
               />
             </div>
             <button
               type="submit"
-              [disabled]="!newComment.trim()"
-              class="p-2 text-[#2454d6] hover:bg-blue-50 rounded-full disabled:opacity-40 transition-colors"
+              [disabled]="sendingComment() || !newComment.trim()"
+              class="p-2 text-[#2454d6] hover:bg-blue-50 rounded-full disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               aria-label="Envoyer"
             >
-              <app-icon name="send" [size]="16" />
+              <app-icon [name]="sendingComment() ? 'spinner' : 'send'" [size]="16" />
             </button>
           </form>
         }
@@ -404,6 +443,11 @@ export class PublicationCardComponent implements OnInit {
   texte = '';
   submissionAttachment = signal<StoredFileAttachment | null>(null);
   uploadingFile = signal(false);
+  loadingSubmissions = signal(false);
+  openingFileKey = signal<string | null>(null);
+  submitting = signal(false);
+  gradingId = signal<string | null>(null);
+  sendingComment = signal(false);
   previewModal = signal<PreviewModalData | null>(null);
   grades: Record<string, number | null> = {};
   corrections: Record<string, string> = {};
@@ -446,66 +490,72 @@ export class PublicationCardComponent implements OnInit {
   }
 
   async openFileViewer(att: StoredFileAttachment, prefix: string): Promise<void> {
-    if (att.dataUrl && att.dataUrl.startsWith('data:')) {
-      await this.fileStorage.saveFile(`${prefix}_${att.name}`, att.dataUrl);
-      await this.fileStorage.saveFile(att.name, att.dataUrl);
-    }
-    const stored =
-      att.dataUrl ||
-      (await this.fileStorage.getFile([`${prefix}_${att.name}`, att.name]));
-    const remoteUrl = att.remoteUrl || (stored.startsWith('http') ? stored : '');
-    const dataUrl = stored.startsWith('data:') ? stored : '';
-
-    let converted = dataUrl ? this.fileStorage.dataUrlToBlobUrl(dataUrl) : null;
-    let fetchedRemoteText: string | null = null;
-
-    if (!converted && remoteUrl) {
-      const remoteBlob = await this.fileStorage.remoteUrlToBlobUrl(remoteUrl, att.name);
-      if (remoteBlob) {
-        converted = remoteBlob;
-        fetchedRemoteText = remoteBlob.textContent;
+    if (this.openingFileKey()) return;
+    this.openingFileKey.set(`${prefix}_${att.name}`);
+    try {
+      if (att.dataUrl && att.dataUrl.startsWith('data:')) {
+        await this.fileStorage.saveFile(`${prefix}_${att.name}`, att.dataUrl);
+        await this.fileStorage.saveFile(att.name, att.dataUrl);
       }
-    }
+      const stored =
+        att.dataUrl ||
+        (await this.fileStorage.getFile([`${prefix}_${att.name}`, att.name]));
+      const remoteUrl = att.remoteUrl || (stored.startsWith('http') ? stored : '');
+      const dataUrl = stored.startsWith('data:') ? stored : '';
 
-    const ext = (att.name.split('.').pop() || '').toLowerCase();
-    const isImageExt = /^(png|jpg|jpeg|gif|webp|svg|bmp)$/i.test(ext);
-    const isPdfExt = ext === 'pdf';
-    const mimeType =
-      converted?.mimeType ||
-      (isImageExt ? `image/${ext === 'jpg' ? 'jpeg' : ext}` : isPdfExt ? 'application/pdf' : '');
+      let converted = dataUrl ? this.fileStorage.dataUrlToBlobUrl(dataUrl) : null;
+      let fetchedRemoteText: string | null = null;
 
-    let textContent: string | null = fetchedRemoteText;
-    if (
-      textContent === null &&
-      dataUrl &&
-      (mimeType.startsWith('text/') ||
-        mimeType === 'application/json' ||
-        /\.(txt|md|csv|json|xml|java|ts|js|html|css|sql)$/i.test(att.name))
-    ) {
-      try {
-        const base64 = dataUrl.split(',')[1] || '';
-        textContent = new TextDecoder().decode(
-          Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)),
-        );
-      } catch {
-        textContent = null;
+      if (!converted && remoteUrl) {
+        const remoteBlob = await this.fileStorage.remoteUrlToBlobUrl(remoteUrl, att.name);
+        if (remoteBlob) {
+          converted = remoteBlob;
+          fetchedRemoteText = remoteBlob.textContent;
+        }
       }
+
+      const ext = (att.name.split('.').pop() || '').toLowerCase();
+      const isImageExt = /^(png|jpg|jpeg|gif|webp|svg|bmp)$/i.test(ext);
+      const isPdfExt = ext === 'pdf';
+      const mimeType =
+        converted?.mimeType ||
+        (isImageExt ? `image/${ext === 'jpg' ? 'jpeg' : ext}` : isPdfExt ? 'application/pdf' : '');
+
+      let textContent: string | null = fetchedRemoteText;
+      if (
+        textContent === null &&
+        dataUrl &&
+        (mimeType.startsWith('text/') ||
+          mimeType === 'application/json' ||
+          /\.(txt|md|csv|json|xml|java|ts|js|html|css|sql)$/i.test(att.name))
+      ) {
+        try {
+          const base64 = dataUrl.split(',')[1] || '';
+          textContent = new TextDecoder().decode(
+            Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)),
+          );
+        } catch {
+          textContent = null;
+        }
+      }
+
+      const activeUrl = converted?.blobUrl || remoteUrl || dataUrl;
+      const safeUrl =
+        converted?.safeUrl || (remoteUrl ? this.fileStorage.trustUrl(remoteUrl) : null);
+
+      this.previewModal.set({
+        name: att.name,
+        typeLabel: att.typeLabel,
+        sizeLabel: att.sizeLabel,
+        dataUrl: activeUrl,
+        blobUrl: activeUrl,
+        safeUrl,
+        mimeType,
+        textContent,
+      });
+    } finally {
+      this.openingFileKey.set(null);
     }
-
-    const activeUrl = converted?.blobUrl || remoteUrl || dataUrl;
-    const safeUrl =
-      converted?.safeUrl || (remoteUrl ? this.fileStorage.trustUrl(remoteUrl) : null);
-
-    this.previewModal.set({
-      name: att.name,
-      typeLabel: att.typeLabel,
-      sizeLabel: att.sizeLabel,
-      dataUrl: activeUrl,
-      blobUrl: activeUrl,
-      safeUrl,
-      mimeType,
-      textContent,
-    });
   }
 
   closeFileViewer(): void {
@@ -543,6 +593,7 @@ export class PublicationCardComponent implements OnInit {
 
   private async loadSubmissions(): Promise<void> {
     this.error.set('');
+    this.loadingSubmissions.set(true);
     try {
       if (this.isTeacher()) {
         const subs = await this.api.getSubmissions(this.pub().id);
@@ -553,21 +604,28 @@ export class PublicationCardComponent implements OnInit {
       }
     } catch (e) {
       this.error.set((e as Error).message);
+    } finally {
+      this.loadingSubmissions.set(false);
     }
   }
 
   async comment(): Promise<void> {
-    if (!this.newComment.trim()) return;
+    if (this.sendingComment() || !this.newComment.trim()) return;
+    this.sendingComment.set(true);
     try {
       await this.api.addComment(this.pub().id, this.newComment.trim());
       this.newComment = '';
       this.comments.set(await this.api.getComments(this.pub().id));
     } catch (e) {
       this.error.set((e as Error).message);
+    } finally {
+      this.sendingComment.set(false);
     }
   }
 
   async submit(): Promise<void> {
+    if (this.submitting() || this.uploadingFile()) return;
+    this.submitting.set(true);
     try {
       const att = this.submissionAttachment();
       let payload = this.texte.trim();
@@ -586,17 +644,22 @@ export class PublicationCardComponent implements OnInit {
       this.submissionAttachment.set(null);
     } catch (e) {
       this.error.set((e as Error).message);
+    } finally {
+      this.submitting.set(false);
     }
   }
 
   async grade(r: Remise): Promise<void> {
     const note = this.grades[r.id];
-    if (note == null) return;
+    if (note == null || this.gradingId()) return;
+    this.gradingId.set(r.id);
     try {
       const updated = await this.api.grade(r.id, Number(note), this.corrections[r.id] ?? '');
       this.submissions.update((l) => l.map((x) => (x.id === r.id ? updated : x)));
     } catch (e) {
       this.error.set((e as Error).message);
+    } finally {
+      this.gradingId.set(null);
     }
   }
 }

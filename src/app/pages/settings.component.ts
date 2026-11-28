@@ -76,13 +76,21 @@ const NOTIFICATION_LABELS: Record<string, string> = {
                 {{ initials() }}
               </div>
             }
-            <label class="mt-3 text-xs font-bold text-[#2454d6] hover:underline cursor-pointer">
-              {{ uploadingPhoto() ? 'Traitement...' : 'Choisir une photo' }}
+            <label
+              class="mt-3 text-xs font-bold text-[#2454d6] hover:underline inline-flex items-center gap-1.5"
+              [class.opacity-60]="uploadingPhoto() || saving()"
+              [class.cursor-not-allowed]="uploadingPhoto() || saving()"
+              [class.cursor-pointer]="!uploadingPhoto() && !saving()"
+            >
+              @if (uploadingPhoto()) {
+                <app-icon name="spinner" [size]="13" />
+              }
+              <span>{{ uploadingPhoto() ? 'Traitement...' : 'Choisir une photo' }}</span>
               <input
                 type="file"
                 accept="image/*"
                 class="hidden"
-                [disabled]="uploadingPhoto()"
+                [disabled]="uploadingPhoto() || saving()"
                 (change)="onPhotoSelected($event)"
               />
             </label>
@@ -90,7 +98,8 @@ const NOTIFICATION_LABELS: Record<string, string> = {
               <button
                 type="button"
                 (click)="removePhoto()"
-                class="mt-1 text-[11px] text-slate-400 hover:text-red-600"
+                [disabled]="uploadingPhoto() || saving()"
+                class="mt-1 text-[11px] text-slate-400 hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Supprimer
               </button>
@@ -106,6 +115,7 @@ const NOTIFICATION_LABELS: Record<string, string> = {
                   type="text"
                   name="prenom"
                   [(ngModel)]="prenom"
+                  [disabled]="saving()"
                   placeholder="Camille"
                   class="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs text-[#182033] focus:border-[#2454d6]"
                 />
@@ -116,6 +126,7 @@ const NOTIFICATION_LABELS: Record<string, string> = {
                   type="text"
                   name="nom"
                   [(ngModel)]="nom"
+                  [disabled]="saving()"
                   placeholder="Dupont"
                   class="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs text-[#182033] focus:border-[#2454d6]"
                 />
@@ -159,6 +170,7 @@ const NOTIFICATION_LABELS: Record<string, string> = {
               type="password"
               name="currentPwd"
               [(ngModel)]="currentPassword"
+              [disabled]="saving()"
               class="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs text-[#182033] focus:border-[#2454d6]"
             />
           </div>
@@ -168,6 +180,7 @@ const NOTIFICATION_LABELS: Record<string, string> = {
               type="password"
               name="newPwd"
               [(ngModel)]="newPassword"
+              [disabled]="saving()"
               class="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs text-[#182033] focus:border-[#2454d6]"
             />
           </div>
@@ -177,6 +190,7 @@ const NOTIFICATION_LABELS: Record<string, string> = {
               type="password"
               name="confirmPwd"
               [(ngModel)]="confirmPassword"
+              [disabled]="saving()"
               class="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs text-[#182033] focus:border-[#2454d6]"
             />
           </div>
@@ -185,14 +199,22 @@ const NOTIFICATION_LABELS: Record<string, string> = {
 
       <!-- SECTION 3: NOTIFICATIONS -->
       <section class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-2xs">
-        <div class="flex items-center gap-3.5 pb-4">
-          <div class="w-10 h-10 rounded-xl bg-[#eef3ff] text-[#2454d6] flex items-center justify-center shrink-0">
-            <app-icon name="bell" [size]="18" />
+        <div class="flex items-center justify-between gap-3.5 pb-4">
+          <div class="flex items-center gap-3.5">
+            <div class="w-10 h-10 rounded-xl bg-[#eef3ff] text-[#2454d6] flex items-center justify-center shrink-0">
+              <app-icon name="bell" [size]="18" />
+            </div>
+            <div>
+              <h2 class="text-base font-extrabold text-[#182033]">Notifications</h2>
+              <p class="text-xs text-slate-400">Choisissez comment vous souhaitez être alerté(e).</p>
+            </div>
           </div>
-          <div>
-            <h2 class="text-base font-extrabold text-[#182033]">Notifications</h2>
-            <p class="text-xs text-slate-400">Choisissez comment vous souhaitez être alerté(e).</p>
-          </div>
+          @if (updatingPrefKey()) {
+            <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-[#2454d6]">
+              <app-icon name="spinner" [size]="14" />
+              <span>Synchronisation...</span>
+            </span>
+          }
         </div>
 
         <div class="mt-2 rounded-xl border border-slate-200/80 overflow-hidden">
@@ -216,7 +238,8 @@ const NOTIFICATION_LABELS: Record<string, string> = {
                   <button
                     type="button"
                     (click)="toggleApp(row)"
-                    class="w-10 h-5 rounded-full transition-colors p-0.5 flex items-center"
+                    [disabled]="updatingPrefKey() !== null || saving()"
+                    class="w-10 h-5 rounded-full transition-colors p-0.5 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                     [class]="row.dansApplication ? 'bg-[#2454d6] justify-end' : 'bg-slate-300 justify-start'"
                     [attr.aria-label]="row.label + ' dans l application'"
                   >
@@ -227,7 +250,8 @@ const NOTIFICATION_LABELS: Record<string, string> = {
                   <button
                     type="button"
                     (click)="toggleEmail(row)"
-                    class="w-10 h-5 rounded-full transition-colors p-0.5 flex items-center"
+                    [disabled]="updatingPrefKey() !== null || saving()"
+                    class="w-10 h-5 rounded-full transition-colors p-0.5 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                     [class]="row.parEmail ? 'bg-[#2454d6] justify-end' : 'bg-slate-300 justify-start'"
                     [attr.aria-label]="row.label + ' par email'"
                   >
@@ -245,17 +269,24 @@ const NOTIFICATION_LABELS: Record<string, string> = {
         <button
           type="button"
           (click)="reset()"
-          class="text-xs font-bold text-slate-600 hover:text-[#182033] px-3 py-2 transition-colors"
+          [disabled]="resetting() || saving() || uploadingPhoto()"
+          class="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-[#182033] disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 transition-colors"
         >
-          Annuler
+          @if (resetting()) {
+            <app-icon name="spinner" [size]="13" />
+          }
+          <span>{{ resetting() ? 'Réinitialisation...' : 'Annuler' }}</span>
         </button>
         <button
           type="button"
           (click)="save()"
-          [disabled]="saving()"
-          class="bg-[#2454d6] hover:bg-[#1d46b8] disabled:opacity-60 text-white font-bold text-xs rounded-xl px-5 py-2.5 shadow-xs transition-colors"
+          [disabled]="saving() || resetting() || uploadingPhoto()"
+          class="bg-[#2454d6] hover:bg-[#1d46b8] disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl px-5 py-2.5 shadow-xs inline-flex items-center gap-2 transition-colors"
         >
-          {{ saving() ? 'Enregistrement...' : 'Enregistrer' }}
+          @if (saving()) {
+            <app-icon name="spinner" [size]="14" />
+          }
+          <span>{{ saving() ? 'Enregistrement...' : 'Enregistrer' }}</span>
         </button>
       </div>
     </div>
@@ -277,6 +308,8 @@ export class SettingsComponent implements OnInit {
   rows = signal<NotificationRow[]>([]);
 
   saving = signal(false);
+  resetting = signal(false);
+  updatingPrefKey = signal<string | null>(null);
   msg = signal('');
   err = signal('');
 
@@ -331,6 +364,7 @@ export class SettingsComponent implements OnInit {
   }
 
   async onPhotoSelected(event: Event): Promise<void> {
+    if (this.uploadingPhoto() || this.saving()) return;
     this.err.set('');
     this.msg.set('');
     const input = event.target as HTMLInputElement;
@@ -363,36 +397,60 @@ export class SettingsComponent implements OnInit {
   }
 
   removePhoto(): void {
+    if (this.uploadingPhoto() || this.saving()) return;
     this.photoDataUrl.set(null);
   }
 
-  toggleApp(row: NotificationRow): void {
+  async toggleApp(row: NotificationRow): Promise<void> {
+    if (this.updatingPrefKey() || this.saving()) return;
     const nextVal = !row.dansApplication;
+    this.updatingPrefKey.set(`${row.type}:app`);
     this.rows.update((list) =>
       list.map((r) => (r.type === row.type ? { ...r, dansApplication: nextVal } : r)),
     );
-    void this.api.updatePreference(row.type, nextVal, row.parEmail).catch(() => undefined);
+    try {
+      await this.api.updatePreference(row.type, nextVal, row.parEmail);
+    } catch {
+      /* keep optimistic or reload on reset */
+    } finally {
+      this.updatingPrefKey.set(null);
+    }
   }
 
-  toggleEmail(row: NotificationRow): void {
+  async toggleEmail(row: NotificationRow): Promise<void> {
+    if (this.updatingPrefKey() || this.saving()) return;
     const nextVal = !row.parEmail;
+    this.updatingPrefKey.set(`${row.type}:email`);
     this.rows.update((list) =>
       list.map((r) => (r.type === row.type ? { ...r, parEmail: nextVal } : r)),
     );
-    void this.api.updatePreference(row.type, row.dansApplication, nextVal).catch(() => undefined);
+    try {
+      await this.api.updatePreference(row.type, row.dansApplication, nextVal);
+    } catch {
+      /* keep optimistic or reload on reset */
+    } finally {
+      this.updatingPrefKey.set(null);
+    }
   }
 
   async reset(): Promise<void> {
+    if (this.resetting() || this.saving()) return;
     this.msg.set('');
     this.err.set('');
-    this.currentPassword = '';
-    this.newPassword = '';
-    this.confirmPassword = '';
-    this.loadFromProfile();
-    await this.loadPreferences();
+    this.resetting.set(true);
+    try {
+      this.currentPassword = '';
+      this.newPassword = '';
+      this.confirmPassword = '';
+      this.loadFromProfile();
+      await this.loadPreferences();
+    } finally {
+      this.resetting.set(false);
+    }
   }
 
   async save(): Promise<void> {
+    if (this.saving() || this.resetting() || this.uploadingPhoto()) return;
     this.msg.set('');
     this.err.set('');
     if (this.newPassword && this.newPassword !== this.confirmPassword) {

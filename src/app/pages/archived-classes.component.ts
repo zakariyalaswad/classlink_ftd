@@ -45,85 +45,97 @@ import { IconComponent } from '../shared/icon.component';
       </div>
     }
 
-    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-      @for (c of filteredArchived(); track c.id) {
-        <div
-          class="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs flex flex-col"
-        >
-          <!-- Top Banner -->
+    @if (store.loading() && store.classes().length === 0) {
+      <div class="bg-white rounded-2xl border border-slate-200/80 p-10 flex items-center justify-center gap-2.5 text-sm font-semibold text-slate-500">
+        <app-icon name="spinner" [size]="20" />
+        <span>Chargement des archives...</span>
+      </div>
+    } @else {
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        @for (c of filteredArchived(); track c.id) {
           <div
-            class="h-24 p-4 relative flex items-start justify-between text-white opacity-90"
-            [class]="store.themeForClass(c.id).bannerBg"
+            class="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs flex flex-col"
           >
-            <div>
-              <span class="text-[10px] font-extrabold uppercase tracking-wider text-white/90">
-                {{ c.matiere || 'INFORMATIQUE' }}
-              </span>
-              <span class="ml-2 text-[10px] font-bold bg-black/25 text-white rounded-md px-2 py-0.5">
-                Archivé
-              </span>
-            </div>
-
+            <!-- Top Banner -->
             <div
-              class="w-10 h-10 rounded-xl bg-white shadow-md border border-slate-100 flex items-center justify-center absolute -bottom-5 right-4"
-              [class]="store.themeForClass(c.id).accentText"
+              class="h-24 p-4 relative flex items-start justify-between text-white opacity-90"
+              [class]="store.themeForClass(c.id).bannerBg"
             >
-              <app-icon name="archive" [size]="18" />
-            </div>
-          </div>
+              <div>
+                <span class="text-[10px] font-extrabold uppercase tracking-wider text-white/90">
+                  {{ c.matiere || 'INFORMATIQUE' }}
+                </span>
+                <span class="ml-2 text-[10px] font-bold bg-black/25 text-white rounded-md px-2 py-0.5">
+                  Archivé
+                </span>
+              </div>
 
-          <!-- Body -->
-          <div class="p-4 pt-6 flex-1 flex flex-col justify-between">
-            <div>
-              <a
-                [routerLink]="['/classes', c.id]"
-                class="font-extrabold text-[15px] text-[#182033] hover:text-[#2454d6] transition-colors block"
+              <div
+                class="w-10 h-10 rounded-xl bg-white shadow-md border border-slate-100 flex items-center justify-center absolute -bottom-5 right-4"
+                [class]="store.themeForClass(c.id).accentText"
               >
-                {{ c.nom }}
-              </a>
-              <p class="text-xs text-slate-500 mt-0.5">
-                {{ store.teacherNameForClass(c.id) }} · {{ store.memberCountForClass(c.id) }} membre(s)
-              </p>
+                <app-icon name="archive" [size]="18" />
+              </div>
             </div>
 
-            <!-- Actions: Désarchiver | Supprimer -->
-            <div class="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-              <button
-                type="button"
-                (click)="unarchive(c)"
-                class="flex-1 bg-[#eef3ff] hover:bg-blue-100 text-[#2454d6] font-bold text-xs rounded-xl px-3 py-2 transition-colors"
-              >
-                Désarchiver
-              </button>
-              <button
-                type="button"
-                (click)="openDeleteModal(c)"
-                class="bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs rounded-xl px-3 py-2 inline-flex items-center gap-1.5 transition-colors"
-                title="Supprimer définitivement"
-              >
-                <app-icon name="trash" [size]="14" /> Supprimer
-              </button>
+            <!-- Body -->
+            <div class="p-4 pt-6 flex-1 flex flex-col justify-between">
+              <div>
+                <a
+                  [routerLink]="['/classes', c.id]"
+                  class="font-extrabold text-[15px] text-[#182033] hover:text-[#2454d6] transition-colors block"
+                >
+                  {{ c.nom }}
+                </a>
+                <p class="text-xs text-slate-500 mt-0.5">
+                  {{ store.teacherNameForClass(c.id) }} · {{ store.memberCountForClass(c.id) }} membre(s)
+                </p>
+              </div>
+
+              <!-- Actions: Désarchiver | Supprimer -->
+              <div class="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  (click)="unarchive(c)"
+                  [disabled]="unarchivingId() !== null || deleting()"
+                  class="flex-1 bg-[#eef3ff] hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed text-[#2454d6] font-bold text-xs rounded-xl px-3 py-2 inline-flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  @if (unarchivingId() === c.id) {
+                    <app-icon name="spinner" [size]="14" />
+                  }
+                  <span>{{ unarchivingId() === c.id ? 'Restauration...' : 'Désarchiver' }}</span>
+                </button>
+                <button
+                  type="button"
+                  (click)="openDeleteModal(c)"
+                  [disabled]="unarchivingId() !== null || deleting()"
+                  class="bg-red-50 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed text-red-600 font-bold text-xs rounded-xl px-3 py-2 inline-flex items-center gap-1.5 transition-colors"
+                  title="Supprimer définitivement"
+                >
+                  <app-icon name="trash" [size]="14" /> Supprimer
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      } @empty {
-        <div class="sm:col-span-2 lg:col-span-3 bg-white rounded-2xl border border-slate-200/80 p-10 text-center">
-          <div class="w-12 h-12 rounded-2xl bg-[#eef3ff] text-[#2454d6] flex items-center justify-center mx-auto mb-3">
-            <app-icon name="archive" [size]="22" />
+        } @empty {
+          <div class="sm:col-span-2 lg:col-span-3 bg-white rounded-2xl border border-slate-200/80 p-10 text-center">
+            <div class="w-12 h-12 rounded-2xl bg-[#eef3ff] text-[#2454d6] flex items-center justify-center mx-auto mb-3">
+              <app-icon name="archive" [size]="22" />
+            </div>
+            <p class="text-sm font-bold text-[#182033]">Aucun cours archivé</p>
+            <p class="text-xs text-slate-500 mt-1">
+              Les cours que vous archivez depuis les paramètres d'une classe apparaîtront ici et seront masqués de la liste principale.
+            </p>
           </div>
-          <p class="text-sm font-bold text-[#182033]">Aucun cours archivé</p>
-          <p class="text-xs text-slate-500 mt-1">
-            Les cours que vous archivez depuis les paramètres d'une classe apparaîtront ici et seront masqués de la liste principale.
-          </p>
-        </div>
-      }
-    </div>
+        }
+      </div>
+    }
 
     <!-- Modal: Confirm Permanent Delete by typing "delete" -->
     @if (classToDelete(); as target) {
       <div
         class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4"
-        (click)="closeDeleteModal()"
+        (click)="!deleting() && closeDeleteModal()"
       >
         <div
           class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4"
@@ -139,7 +151,12 @@ import { IconComponent } from '../shared/icon.component';
                 <p class="text-xs text-slate-500">{{ target.nom }}</p>
               </div>
             </div>
-            <button type="button" (click)="closeDeleteModal()" class="text-slate-400 hover:text-slate-600">
+            <button
+              type="button"
+              (click)="closeDeleteModal()"
+              [disabled]="deleting()"
+              class="text-slate-400 hover:text-slate-600 disabled:opacity-40"
+            >
               <app-icon name="close" [size]="18" />
             </button>
           </div>
@@ -156,6 +173,7 @@ import { IconComponent } from '../shared/icon.component';
               type="text"
               name="confirmDeleteInput"
               [(ngModel)]="confirmText"
+              [disabled]="deleting()"
               placeholder="delete"
               class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-xs font-mono focus:border-red-500"
               autocomplete="off"
@@ -163,16 +181,24 @@ import { IconComponent } from '../shared/icon.component';
           </div>
 
           <div class="flex justify-end gap-2 pt-2">
-            <button type="button" (click)="closeDeleteModal()" class="btn-light !text-xs">
+            <button
+              type="button"
+              (click)="closeDeleteModal()"
+              [disabled]="deleting()"
+              class="btn-light !text-xs"
+            >
               Annuler
             </button>
             <button
               type="button"
               (click)="confirmPermanentDelete()"
               [disabled]="confirmText.trim().toLowerCase() !== 'delete' || deleting()"
-              class="bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white font-bold text-xs rounded-xl px-4 py-2 transition-colors"
+              class="bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl px-4 py-2 inline-flex items-center gap-1.5 transition-colors"
             >
-              {{ deleting() ? 'Suppression...' : 'Supprimer définitivement' }}
+              @if (deleting()) {
+                <app-icon name="spinner" [size]="14" />
+              }
+              <span>{{ deleting() ? 'Suppression...' : 'Supprimer définitivement' }}</span>
             </button>
           </div>
         </div>
@@ -188,6 +214,7 @@ export class ArchivedClassesComponent {
   classToDelete = signal<Classe | null>(null);
   confirmText = '';
   deleting = signal(false);
+  unarchivingId = signal<string | null>(null);
   msg = signal('');
   err = signal('');
 
@@ -204,14 +231,18 @@ export class ArchivedClassesComponent {
   });
 
   async unarchive(c: Classe): Promise<void> {
+    if (this.unarchivingId() || this.deleting()) return;
     this.msg.set('');
     this.err.set('');
+    this.unarchivingId.set(c.id);
     try {
       await this.api.archive(c.id, false);
       await this.store.refresh();
       this.msg.set(`Le cours « ${c.nom} » a été désarchivé et restauré dans vos classes actives.`);
     } catch (e) {
       this.err.set((e as Error).message);
+    } finally {
+      this.unarchivingId.set(null);
     }
   }
 
@@ -227,7 +258,7 @@ export class ArchivedClassesComponent {
 
   async confirmPermanentDelete(): Promise<void> {
     const target = this.classToDelete();
-    if (!target || this.confirmText.trim().toLowerCase() !== 'delete') return;
+    if (!target || this.deleting() || this.confirmText.trim().toLowerCase() !== 'delete') return;
     this.deleting.set(true);
     this.msg.set('');
     this.err.set('');

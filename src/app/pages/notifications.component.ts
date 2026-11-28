@@ -4,10 +4,11 @@ import { Router } from '@angular/router';
 import { ApiService } from '../core/api.service';
 import { AppNotification } from '../core/models';
 import { StoreService } from '../core/store.service';
+import { IconComponent } from '../shared/icon.component';
 
 @Component({
   selector: 'app-notifications',
-  imports: [DatePipe],
+  imports: [DatePipe, IconComponent],
   template: `
     <div class="flex items-center justify-between mb-4">
       <div>
@@ -17,14 +18,27 @@ import { StoreService } from '../core/store.service';
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <button type="button" class="btn-light !text-xs" (click)="refresh()">Actualiser</button>
+        <button
+          type="button"
+          class="btn-light !text-xs"
+          (click)="refresh()"
+          [disabled]="refreshing() || markingAll()"
+        >
+          @if (refreshing()) {
+            <app-icon name="spinner" [size]="13" />
+          }
+          <span>{{ refreshing() ? 'Actualisation...' : 'Actualiser' }}</span>
+        </button>
         <button
           type="button"
           class="btn-light !text-xs"
           (click)="readAll()"
-          [disabled]="!store.unreadCount()"
+          [disabled]="markingAll() || refreshing() || !store.unreadCount()"
         >
-          Tout marquer comme lu
+          @if (markingAll()) {
+            <app-icon name="spinner" [size]="13" />
+          }
+          <span>{{ markingAll() ? 'Traitement...' : 'Tout marquer comme lu' }}</span>
         </button>
       </div>
     </div>
@@ -39,9 +53,10 @@ import { StoreService } from '../core/store.service';
       @for (n of store.notifications(); track n.id) {
         <button
           type="button"
-          class="card w-full text-left transition-colors hover:bg-slate-50"
+          class="card w-full text-left transition-colors hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
           [class.border-blue-300]="!n.dateLecture"
           [class.bg-[#f6f9ff]]="!n.dateLecture"
+          [disabled]="openingId() !== null"
           (click)="open(n)"
         >
           <div class="flex items-start justify-between gap-3">
@@ -55,7 +70,11 @@ import { StoreService } from '../core/store.service';
                 {{ n.dateCreation | date: 'dd/MM/yyyy HH:mm' }}
               </p>
             </div>
-            @if (!n.dateLecture) {
+            @if (openingId() === n.id) {
+              <span class="text-[#2454d6] shrink-0 mt-1">
+                <app-icon name="spinner" [size]="15" />
+              </span>
+            } @else if (!n.dateLecture) {
               <span class="w-2.5 h-2.5 rounded-full bg-[#2454d6] shrink-0 mt-1.5" aria-label="Non lue"></span>
             }
           </div>
@@ -71,36 +90,55 @@ export class NotificationsComponent {
   private readonly router = inject(Router);
   readonly store = inject(StoreService);
   readonly error = signal('');
+  readonly refreshing = signal(false);
+  readonly markingAll = signal(false);
+  readonly openingId = signal<string | null>(null);
 
   async open(n: AppNotification): Promise<void> {
+    if (this.openingId()) return;
     this.error.set('');
-    if (!n.dateLecture) {
-      try {
-        await this.api.markRead(n.id);
-        await this.store.refreshNotifications();
-      } catch (e) {
-        this.error.set((e as Error).message);
+    this.openingId.set(n.id);
+    try {
+      if (!n.dateLecture) {
+        try {
+          await this.api.markRead(n.id);
+          await this.store.refreshNotifications();
+        } catch (e) {
+          this.error.set((e as Error).message);
+        }
       }
-    }
-    if (n.lienCible) {
-      await this.router.navigateByUrl(n.lienCible);
-    } else if (n.classeId) {
-      await this.router.navigate(['/classes', n.classeId]);
+      if (n.lienCible) {
+        await this.router.navigateByUrl(n.lienCible);
+      } else if (n.classeId) {
+        await this.router.navigate(['/classes', n.classeId]);
+      }
+    } finally {
+      this.openingId.set(null);
     }
   }
 
   async readAll(): Promise<void> {
+    if (this.markingAll()) return;
     this.error.set('');
+    this.markingAll.set(true);
     try {
       await this.api.markAllRead();
       await this.store.refreshNotifications();
     } catch (e) {
       this.error.set((e as Error).message);
+    } finally {
+      this.markingAll.set(false);
     }
   }
 
   async refresh(): Promise<void> {
+    if (this.refreshing()) return;
     this.error.set('');
-    await this.store.refreshNotifications();
+    this.refreshing.set(true);
+    try {
+      await this.store.refreshNotifications();
+    } finally {
+      this.refreshing.set(false);
+    }
   }
 }

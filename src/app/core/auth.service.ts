@@ -1,6 +1,6 @@
 import { inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { initializeApp } from 'firebase/app';
+import { FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
 import {
   createUserWithEmailAndPassword,
   getAuth,
@@ -37,7 +37,8 @@ export class AuthService {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly fileStorage = inject(FileStorageService);
-  private readonly auth = getAuth(initializeApp(environment.firebase));
+  readonly firebaseApp: FirebaseApp = getApps().length ? getApp() : initializeApp(environment.firebase);
+  private readonly auth = getAuth(this.firebaseApp);
 
   readonly user = signal<User | null>(null);
   readonly profile = signal<Utilisateur | null>(null);
